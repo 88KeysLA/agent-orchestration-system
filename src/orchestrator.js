@@ -49,6 +49,12 @@ class Orchestrator {
     this.tenancy = options.tenancy || null;
     this.context = options.context || null;
     this.composer = new AgentComposer();
+
+    // Context-aware routing hooks
+    // contextKeyFn(analysis, snapshot) -> string: enrich RL key with context dimensions
+    this.contextKeyFn = options.contextKeyFn || null;
+    // contextBiasFn(candidates, snapshot, agentMeta) -> agentName|null: bias cold-start selection
+    this.contextBiasFn = options.contextBiasFn || null;
   }
 
   registerAgent(name, version, agent, metadata = {}) {
@@ -81,7 +87,6 @@ class Orchestrator {
 
     // 1. Analyze task via meta-router
     const analysis = analyzeTask(taskDescription);
-    const contextKey = context || `${analysis.taskType}-${analysis.domain}`;
 
     // 2. HITL gate — check before doing anything expensive
     if (this.hitl) {
@@ -102,6 +107,15 @@ class Orchestrator {
     // 4. Get context snapshot (influences routing metadata)
     const contextSnapshot = this.context ? await this.context.getContext() : null;
 
+    // Enrich contextKey with context dimensions if hook provided
+    const contextKey = (() => {
+      const base = context || `${analysis.taskType}-${analysis.domain}`;
+      if (this.contextKeyFn && contextSnapshot) {
+        return this.contextKeyFn(analysis, contextSnapshot) || base;
+      }
+      return base;
+    })();
+
     // 2. Get available agents, filter unhealthy
     const agentNames = Array.from(this.agents.keys());
     if (agentNames.length === 0) throw new Error('No agents registered');
@@ -114,7 +128,7 @@ class Orchestrator {
     const candidates = healthyAgents.length > 0 ? healthyAgents : agentNames;
 
     // 3. Select agent (strength-aware RL)
-    const selectedAgent = this._selectAgent(contextKey, candidates, analysis, taskDescription);
+    const selectedAgent = this._selectAgent(contextKey, candidates, analysis, taskDescription, contextSnapshot);
 
     // 4. Record decision with explainer
     const alternatives = candidates.map(name => ({
@@ -279,22 +293,27 @@ class Orchestrator {
     };
   }
 
-  _selectAgent(contextKey, candidates, analysis, taskDescription) {
+  _selectAgent(contextKey, candidates, analysis, taskDescription, contextSnapshot) {
     // If RL has learned data for this context, defer to RL
     const hasData = candidates.some(c => this.rl.getQ(contextKey, c) > 0);
     if (hasData) {
       return this.rl.selectAgent(contextKey, candidates);
     }
 
-    // No RL data yet — use strength affinity to pick the best initial agent
-    // (still respect epsilon for exploration)
+    // No RL data yet — cold start
     if (Math.random() < this.rl.epsilon) {
       return candidates[Math.floor(Math.random() * candidates.length)];
     }
 
+    // Context bias hook: let caller steer cold-start based on snapshot
+    if (this.contextBiasFn && contextSnapshot) {
+      const biased = this.contextBiasFn(candidates, contextSnapshot, this._agentMeta);
+      if (biased && candidates.includes(biased)) return biased;
+    }
+
+    // Fallback: strength affinity matching
     let best = candidates[0];
     let bestScore = 0;
-    // Match against both analysis categories AND the actual task description
     const taskWords = `${analysis.taskType} ${analysis.domain} ${analysis.urgency} ${taskDescription || ''}`.toLowerCase();
 
     for (const name of candidates) {

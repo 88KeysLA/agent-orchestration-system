@@ -368,7 +368,85 @@ async function testErrorHandling() {
     ctx.shutdown();
   });
 
-  // Composer integration
+  // Context-aware RL routing
+  await test('contextKeyFn enriches RL key with context', async () => {
+    const { ContextManager, StaticProvider } = require('../src/context-providers');
+    const ctx = new ContextManager();
+    ctx.add('time', new StaticProvider({ period: 'night' }));
+
+    const seenKeys = new Set();
+    const orc = new Orchestrator({
+      context: ctx,
+      contextKeyFn: (analysis, snapshot) => `${analysis.taskType}-${snapshot?.time?.period || 'any'}`,
+      epsilon: 0
+    });
+    const origUpdate = orc.rl.update.bind(orc.rl);
+    orc.rl.update = (key, agent, reward) => { seenKeys.add(key); origUpdate(key, agent, reward); };
+
+    orc.registerAgent('a', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
+    await orc.execute('some task');
+    const hasNightKey = [...seenKeys].some(k => k.endsWith('-night'));
+    if (!hasNightKey) throw new Error(`Expected key ending in '-night', got: ${[...seenKeys]}`);
+    ctx.shutdown();
+  });
+
+  await test('contextBiasFn steers cold-start selection', async () => {
+    const { ContextManager, StaticProvider } = require('../src/context-providers');
+    const ctx = new ContextManager();
+    ctx.add('load', new StaticProvider({ preferFast: true }));
+
+    const orc = new Orchestrator({
+      context: ctx,
+      epsilon: 0,
+      contextBiasFn: (candidates, snapshot) =>
+        snapshot?.load?.preferFast ? candidates.find(c => c === 'fast') || null : null
+    });
+
+    orc.registerAgent('slow', '1.0.0', { execute: async () => 'slow', healthCheck: async () => true }, {});
+    orc.registerAgent('fast', '1.0.0', { execute: async () => 'fast', healthCheck: async () => true }, {});
+
+    const result = await orc.execute('do something');
+    if (result.agent !== 'fast') throw new Error(`Expected fast, got ${result.agent}`);
+    ctx.shutdown();
+  });
+
+  await test('contextBiasFn ignored when RL has learned data', async () => {
+    const { ContextManager, StaticProvider } = require('../src/context-providers');
+    const ctx = new ContextManager();
+    ctx.add('load', new StaticProvider({ preferFast: true }));
+
+    const orc = new Orchestrator({
+      context: ctx,
+      epsilon: 0,
+      contextBiasFn: () => 'fast'
+    });
+    orc.rl.epsilon = 0; // also zero out RL epsilon
+
+    orc.registerAgent('slow', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
+    orc.registerAgent('fast', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
+
+    // Teach RL to strongly prefer 'slow' for this context key
+    const { analyzeTask } = require('../src/meta-agent-router');
+    const analysis = analyzeTask('do something');
+    const key = `${analysis.taskType}-${analysis.domain}`;
+    orc.rl.update(key, 'slow', 200);
+    orc.rl.update(key, 'fast', 1);
+
+    const result = await orc.execute('do something');
+    if (result.agent !== 'slow') throw new Error(`RL should override bias, got ${result.agent}`);
+    ctx.shutdown();
+  });
+
+  await test('no contextKeyFn falls back to default key', async () => {
+    const orc = new Orchestrator({ epsilon: 0 });
+    const seenKeys = new Set();
+    const origUpdate = orc.rl.update.bind(orc.rl);
+    orc.rl.update = (key, agent, reward) => { seenKeys.add(key); origUpdate(key, agent, reward); };
+    orc.registerAgent('a', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
+    await orc.execute('task');
+    if (![...seenKeys].some(k => k.includes('-'))) throw new Error('Expected default taskType-domain key');
+  });
+
   await test('Composer available on orchestrator with registered agents', async () => {
     const orc = new Orchestrator();
     orc.registerAgent('a', '1.0.0', { execute: async t => `A:${t}`, healthCheck: async () => true }, {});
