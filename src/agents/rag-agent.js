@@ -14,7 +14,7 @@ class RAGAgent {
     const response = await fetch(`${this.host}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: task, top_k: this.topK })
+      body: JSON.stringify({ question: task, top_k: this.topK })
     });
 
     if (!response.ok) {
@@ -23,6 +23,21 @@ class RAGAgent {
 
     const data = await response.json();
     const duration = Date.now() - startTime;
+
+    // Villa RAG returns { answer, sources, query_time_ms }
+    // Generic RAG returns { results: [...] } or { matches: [...] }
+    if (data.answer) {
+      const sources = data.sources || [];
+      this.lastUsage = {
+        chunksReturned: sources.length,
+        queryDuration: data.query_time_ms || duration,
+        model: data.model_used || null
+      };
+      const sourceList = sources.map((s, i) =>
+        `[${i + 1}] ${s.file || ''}${s.section ? ' > ' + s.section : ''} (${(s.score || 0).toFixed(3)})`
+      ).join('\n');
+      return sourceList ? `${data.answer}\n\nSources:\n${sourceList}` : data.answer;
+    }
 
     const chunks = data.results || data.matches || [];
     this.lastUsage = {
