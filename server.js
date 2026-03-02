@@ -78,7 +78,16 @@ async function main() {
     eventStorePath: path.join(dataDir, 'events.json'),
     hitl,
     context,
-    tenancy
+    tenancy,
+    contextKeyFn: (analysis, snapshot) => {
+      const period = snapshot?.time?.period || 'any';
+      return `${analysis.taskType}-${analysis.domain}-${period}`;
+    },
+    contextBiasFn: (candidates, snapshot) => {
+      // Prefer local ollama at night — lowest latency, zero cost
+      if (snapshot?.time?.period === 'night' && candidates.includes('ollama')) return 'ollama';
+      return null;
+    }
   });
 
   // Connect Redis bus for cross-machine messaging (if REDIS_URL set)
