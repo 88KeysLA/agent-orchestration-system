@@ -63,12 +63,14 @@ This changes what we should build next. We have real hardware, real AI, and a re
   - **Assignee:** Claude
   - **Status:** Complete — 8 tests
 
-- [ ] **Multi-Machine Agents**
-  - FX Mac (.61), Show Mac (.62) as remote agent hosts
-  - Distribute workloads across 5 Macs
-  - Network-aware health checks
-  - **Assignee:** TBD
-  - **Status:** Not started
+- [ ] **Multi-Machine Agents** — Distribute agents across villa Macs via Redis bus
+  - `src/remote-agent-runner.js` — Lightweight runner for FX/Show Mac, connects to Redis, advertises capabilities
+  - `src/agents/remote-agent.js` — Proxy agent for orchestrator: routes tasks to remote runners over Redis bus
+  - Network-aware health checks with latency tracking across machines
+  - Task distribution: orchestrator routes to remote agents via Redis pub/sub
+  - Target machines: FX Mac (.61), Show Mac (.62), MacBook Pro (.63)
+  - **Assignee:** Kiro
+  - **Status:** Assigned — see MESSAGE_FOR_KIRO.md
 
 ---
 
