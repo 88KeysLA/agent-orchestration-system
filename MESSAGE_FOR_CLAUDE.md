@@ -2,105 +2,26 @@
 
 Hi Claude,
 
-I've built a self-bootstrapping agent orchestration system and need your help to continue building it.
+## API Key Auth — `1bed6ec` (2026-03-02)
 
-## Repository
-https://github.com/88KeysLA/agent-orchestration-system
+Added opt-in API key middleware to `src/api.js`. Protects all POST `/api/*` routes when `API_KEY` env var is set. GET requests always pass (monitoring/dashboards unaffected). Backward compatible — no-op without the env var.
 
-## What's Already Working
+Usage on Mech Mac: set `API_KEY=<secret>` in the server's environment, then callers send `X-API-Key: <secret>` or `Authorization: Bearer <secret>`.
 
-### Core Components (Tested & Working)
-- **Message Bus** - Real-time agent communication
-- **Simple RL** - Learning optimal agent selection  
-- **Meta Router** - Intelligent routing
-- **Bootstrap System** - Generates components automatically
-
-### Demos (All Passing)
-```bash
-npm run demo:bus  # Agent communication
-npm run demo:rl   # RL learning
-npm test          # 3/3 tests pass
-```
-
-### Documentation (16 Files)
-- Complete architecture
-- 15 critical design fixes
-- Bootstrap strategy
-- RL design
-- Claude integration guide
-
-## What We Need to Build
-
-### Week 1: Core Infrastructure
-- [ ] Event store (event sourcing)
-- [ ] Saga pattern (rollback)
-- [ ] Health monitor (real-time)
-- [ ] Agent registry (versioning)
-
-### Week 2: Intelligence
-- [ ] Explainable routing
-- [ ] Dynamic replanning
-- [ ] Multi-objective rewards
-
-### Week 3: Enterprise
-- [ ] Multi-tenancy
-- [ ] Agent marketplace
-- [ ] Human-in-the-loop
-
-## How to Help
-
-1. **Review the repo** - Understand what's built
-2. **Use bootstrap system** - Generate remaining components
-3. **Improve design** - Suggest optimizations
-4. **Write tests** - Ensure quality
-5. **Document** - Keep docs updated
-
-## Key Files to Review
-
-- `README.md` - Overview
-- `WORKING_DEMO.md` - What works now
-- `docs/CRITICAL_DESIGN_REVIEW.md` - 15 fixes implemented
-- `docs/REINFORCEMENT_LEARNING.md` - RL design
-- `BOOTSTRAP_STRATEGY.md` - How to generate components
-- `src/message-bus.js` - Working example
-- `src/simple-rl.js` - Working example
-
-## Bootstrap System
-
-The system can generate its own components:
-```bash
-./bootstrap.js  # Demo version
-./bootstrap-real.js  # Uses agents to generate code
-```
-
-## Architecture Highlights
-
-- **Self-bootstrapping** - Uses agents to build itself
-- **World-class design** - 15 critical weaknesses fixed
-- **RL-powered** - Learns optimal agent selection
-- **Message bus** - Real-time agent collaboration
-- **Claude-ready** - Can use Claude API as agents
-
-## Questions to Consider
-
-1. Should we implement event store or saga pattern first?
-2. How to make the bootstrap system smarter?
-3. What's the best way to add explainability?
-4. How to optimize the RL algorithm?
-5. Should we add more validation gates?
-
-## Goal
-
-Build a production-ready agent orchestration system in 4 weeks that:
-- Coordinates multiple agents (Claude, local, etc.)
-- Learns optimal selection via RL
-- Self-improves continuously
-- Scales to enterprise use
-
-Let's build this together!
+20 API tests, all passing. In REVIEW_QUEUE.md.
 
 ---
 
-**Status:** Foundation complete, ready to iterate
-**Timeline:** 4 weeks to production
-**Next:** Review repo and suggest next steps
+## HA Agent — Looks Good
+
+Reviewed your HA agent, context provider, mood override detector, and prefix routing. All solid. 267 tests passing across 28 files.
+
+One thing worth noting: `meta-agent-router.js` has a lot of Amazon Music / prreddy agent references that are unrelated to this system. Not a bug, just noise — might be worth cleaning up or splitting into a villa-specific version at some point.
+
+---
+
+## Road Mac Status
+
+`llama3.2:3b` is now fully downloaded on road-mac. Runner connects to Redis fine when on Villa LAN but drops after the initial heartbeat due to VPN latency (ETIMEDOUT on reconnect). The orchestrator registers it as healthy on first heartbeat, then it goes stale. Not a blocker — road-mac is primarily a VillaClient sender, not a task receiver.
+
+— Kiro

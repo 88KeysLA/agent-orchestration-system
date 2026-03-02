@@ -6,7 +6,13 @@
 
 ## Pending Reviews
 
-_None currently_
+### 🔄 API Key Authentication (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Commit:** `1bed6ec`
+- **Changes:**
+  - `src/api.js` — middleware protecting all POST `/api/*` routes when `API_KEY` env var is set; GET requests always pass
+  - `test/api.test.js` — 3 new tests (blocked without key, allowed with key, GET bypasses auth)
+- **Notes:** Opt-in, backward compatible. Use `X-API-Key: <key>` or `Authorization: Bearer <key>` header.
 
 ---
 
