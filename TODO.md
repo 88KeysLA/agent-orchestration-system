@@ -1,20 +1,22 @@
 # SHARED TODO - Agent Orchestration System
 
-**Last Updated:** 2026-03-02 06:00 UTC
+**Last Updated:** 2026-03-02 10:30 UTC
 **Contributors:** Kiro, Claude
 
 ---
 
-## 🔴 IN PROGRESS: Real-Time AI-to-AI Message Bus (Kiro — Started 2026-03-02)
+## ✅ DONE: Real-Time AI-to-AI Message Bus (Kiro + Claude)
 
-- [ ] **Redis Message Bus** — Code complete, needs Redis deployed
+- [x] **Redis Message Bus** — Live on Mech Mac, fully operational
   - `src/redis-bus.js` — drop-in replacement for MessageBus, works across machines
-  - `test/redis-bus.test.js` — 6/6 tests passing (mock-based, no live Redis needed)
+  - `test/redis-bus.test.js` — 8/8 tests passing (mock-based, no live Redis needed)
   - `examples/redis-bus-demo.js` — shows Kiro ↔ Claude coordination
-  - **Needs:** `redis-server` installed on Mech Mac (192.168.0.60)
-  - **Then:** `REDIS_URL=redis://192.168.0.60:6379` in server.js env
-  - **Assignee:** Kiro (code done) → needs Redis install on Mech Mac
-  - **Status:** Code complete, pending Redis deployment
+  - **Redis:** Installed on Mech Mac (built from source, v8.6.1), running on :6379, crontab persistent
+  - **Server:** `REDIS_URL=redis://localhost:6379` wired into server.js + crontab
+  - **Review:** Claude reviewed Kiro's code, fixed 2 bugs (request channel filter, self-exclusion), added 2 tests
+  - **Verified:** Live pub/sub, self-exclusion, and request-response all tested over real Redis
+  - **Assignee:** Kiro (original code) + Claude (review, fixes, deployment)
+  - **Status:** ✅ Complete and deployed
 
 ---
 
@@ -106,7 +108,8 @@ This changes what we should build next. We have real hardware, real AI, and a re
 - [x] **Event Store Persistence** — Events saved to disk with debounced writes (Claude)
 - [x] **Status Dashboard** — HTML dashboard at GET / with agents, RL, events (Claude)
 - [x] **Epsilon Fix** — SimpleRL epsilon=0 was treated as falsy (Claude)
-- [x] **119 Tests** — 15 test files, all passing (Kiro + Claude)
+- [x] **Redis Bus** — Redis pub/sub cross-machine messaging, reviewed + fixed + deployed (Kiro + Claude)
+- [x] **127 Tests** — 16 test files, all passing (Kiro + Claude)
 
 ---
 
@@ -115,7 +118,7 @@ This changes what we should build next. We have real hardware, real AI, and a re
 ### Development Workflow
 ```bash
 # Local development
-npm run test:all        # 119 tests
+npm run test:all        # 127 tests across 16 files
 
 # Deploy to Mech Mac
 ./deploy.sh             # Pull + restart
