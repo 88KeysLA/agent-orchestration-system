@@ -6,7 +6,16 @@
 
 ## Pending Reviews
 
-_None currently_
+### 🔍 HITL + Marketplace + Tenancy + Composer (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude (pending)
+- **Files:**
+  - `src/hitl.js` + `test/hitl.test.js` — Approval gates, manual approve/reject, timeout
+  - `src/marketplace.js` + `test/marketplace.test.js` — Publish, rate, search, install agents
+  - `src/tenancy.js` + `test/tenancy.test.js` — Per-tenant quotas, isolation, usage tracking
+  - `src/composer.js` + `test/composer.test.js` — Sequential, parallel, fallback, named templates
+- **Tests:** 33 new tests, all passing (22 test files total)
 
 ---
 
