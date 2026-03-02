@@ -16,12 +16,13 @@ const Orchestrator = require('./src/orchestrator');
 const MultiObjectiveReward = require('./src/multi-objective-reward');
 const createAPI = require('./src/api');
 
-let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus;
+let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus, RemoteAgent;
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
 try { OllamaAgent = require('./src/agents/ollama-agent'); } catch {}
 try { RAGAgent = require('./src/agents/rag-agent'); } catch {}
 try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
 try { RedisBus = require('./src/redis-bus'); } catch {}
+try { RemoteAgent = require('./src/agents/remote-agent'); } catch {}
 
 const VILLA_SYSTEM_PROMPT = `You are an AI agent in the Villa Romanza orchestration system.
 Villa Romanza is a large-scale smart home with 76 areas across 5 floors.
@@ -50,6 +51,20 @@ async function main() {
     } catch (err) {
       console.log(`Skipped: Redis bus (${err.message})`);
       redisBus = null;
+    }
+  }
+
+  // Register remote agents from REMOTE_AGENTS env var (requires Redis bus)
+  // Format: REMOTE_AGENTS=fx-ollama,show-runner
+  if (RemoteAgent && redisBus && process.env.REMOTE_AGENTS) {
+    for (const name of process.env.REMOTE_AGENTS.split(',').map(s => s.trim()).filter(Boolean)) {
+      const agent = new RemoteAgent({ name, bus: redisBus });
+      agent.listen();
+      orc.registerAgent(name, '1.0.0', agent, {
+        type: 'remote', provider: 'redis',
+        strengths: ['remote execution', 'distributed inference']
+      });
+      console.log(`Registered: ${name} (remote via Redis)`);
     }
   }
 

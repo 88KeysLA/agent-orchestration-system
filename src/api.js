@@ -120,10 +120,13 @@ function createAPI(orchestrator) {
       await orchestrator.health.checkAll();
       const agents = Array.from(orchestrator.agents.keys()).map(name => {
         const status = orchestrator.health.getStatus(name);
+        const agent = orchestrator.agents.get(name);
         return {
           name,
           status: status ? status.status : 'unknown',
-          lastCheck: status ? status.lastCheck : null
+          lastCheck: status ? status.lastCheck : null,
+          latency: agent.latency != null ? agent.latency : undefined,
+          capabilities: agent.capabilities && Object.keys(agent.capabilities).length ? agent.capabilities : undefined
         };
       });
       res.json({ agents });
