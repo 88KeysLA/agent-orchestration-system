@@ -79,6 +79,13 @@ const agentRules = {
       agents: ['music-qa', 'prreddy-ui-tester'],
       pattern: 'Testing & Validation',
       priority: 'medium'
+    },
+    homeControl: {
+      keywords: ['turn on', 'turn off', 'set brightness', 'set mode', 'set mood',
+        'light', 'dim', 'volume', 'temperature', 'villa mode', 'mood'],
+      agents: ['ha'],
+      pattern: 'Direct Execution',
+      priority: 'high'
     }
   },
 
@@ -92,6 +99,13 @@ const agentRules = {
     alexa: {
       keywords: ['alexa', 'voice', 'skill', 'echo', 'device'],
       agentPrefix: 'alexa-',
+      priority: 10
+    },
+    homeAutomation: {
+      keywords: ['light', 'lights', 'turn on', 'turn off', 'brightness', 'mode',
+        'villa', 'mood', 'temperature', 'thermostat', 'home assistant', 'entity',
+        'scene', 'sonos', 'media player', 'volume', 'smart home'],
+      agentPrefix: 'ha-',
       priority: 10
     },
     generic: {

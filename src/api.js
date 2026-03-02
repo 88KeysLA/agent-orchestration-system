@@ -249,6 +249,32 @@ function createAPI(orchestrator) {
     }
   });
 
+  // GET /api/mood/overrides — Recent mood override detections
+  app.get('/api/mood/overrides', (req, res) => {
+    try {
+      if (!orchestrator.overrideDetector) return res.json({ overrides: [] });
+      const since = parseInt(req.query.since) || 0;
+      res.json({ overrides: orchestrator.overrideDetector.getOverrides(since) });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/mood/context — Proxy to intent resolver for current time period + modifiers
+  app.get('/api/mood/context', async (req, res) => {
+    try {
+      const resolverUrl = process.env.INTENT_RESOLVER_URL || 'http://192.168.0.60:8400';
+      const fetchRes = await fetch(`${resolverUrl}/context`, {
+        signal: AbortSignal.timeout(5000)
+      });
+      if (!fetchRes.ok) return res.status(502).json({ error: 'Intent resolver unavailable' });
+      const data = await fetchRes.json();
+      res.json(data);
+    } catch (error) {
+      res.status(502).json({ error: `Intent resolver unreachable: ${error.message}` });
+    }
+  });
+
   // GET /api/context — Current context snapshot
   app.get('/api/context', async (req, res) => {
     try {

@@ -16,13 +16,17 @@ const Orchestrator = require('./src/orchestrator');
 const MultiObjectiveReward = require('./src/multi-objective-reward');
 const createAPI = require('./src/api');
 
-let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus, RemoteAgent;
+let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus, RemoteAgent, HAAgent, HAContextProvider;
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
 try { OllamaAgent = require('./src/agents/ollama-agent'); } catch {}
 try { RAGAgent = require('./src/agents/rag-agent'); } catch {}
 try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
 try { RedisBus = require('./src/redis-bus'); } catch {}
 try { RemoteAgent = require('./src/agents/remote-agent'); } catch {}
+try { HAAgent = require('./src/agents/ha-agent'); } catch {}
+try { HAContextProvider = require('./src/ha-context-provider'); } catch {}
+let MoodOverrideDetector;
+try { MoodOverrideDetector = require('./src/mood-override-detector'); } catch {}
 
 const HITL = require('./src/hitl');
 const { ContextManager, StaticProvider, TimeProvider } = require('./src/context-providers');
@@ -81,7 +85,8 @@ async function main() {
     tenancy,
     contextKeyFn: (analysis, snapshot) => {
       const period = snapshot?.time?.period || 'any';
-      return `${analysis.taskType}-${analysis.domain}-${period}`;
+      const mode = snapshot?.ha?.villa_mode || 'any';
+      return `${analysis.taskType}-${analysis.domain}-${period}-${mode}`;
     },
     contextBiasFn: (candidates, snapshot) => {
       // Prefer local ollama at night — lowest latency, zero cost
@@ -184,6 +189,82 @@ async function main() {
       strengths: ['villa knowledge', 'synthesized answers', 'device info', 'documentation']
     });
     console.log('Registered: rag-ollama (RAG retrieval + Ollama synthesis)');
+  }
+
+  // Register HA agent if token available
+  if (HAAgent && process.env.HA_TOKEN) {
+    const ha = new HAAgent({
+      baseUrl: process.env.HA_URL || 'http://192.168.1.6:8123',
+      token: process.env.HA_TOKEN,
+      intentResolverUrl: process.env.INTENT_RESOLVER_URL || 'http://192.168.0.60:8400'
+    });
+
+    const healthy = await ha.healthCheck();
+    if (healthy) {
+      orc.registerAgent('ha', '1.0.0', ha, {
+        type: 'local', provider: 'home-assistant',
+        strengths: ['home automation', 'smart home', 'lights', 'device control',
+          'villa mode', 'mood', 'temperature', 'turn on', 'turn off']
+      });
+      console.log(`Registered: ha (Home Assistant at ${process.env.HA_URL || 'http://192.168.1.6:8123'})`);
+    } else {
+      console.log('Skipped: ha (HA unreachable)');
+    }
+  }
+
+  // Register HA context provider (read-only, works even if HA agent didn't register)
+  if (HAContextProvider && process.env.HA_TOKEN) {
+    const haCtx = new HAContextProvider({
+      baseUrl: process.env.HA_URL || 'http://192.168.1.6:8123',
+      token: process.env.HA_TOKEN
+    });
+    context.add('ha', haCtx);
+    haCtx.start();
+    console.log('Context: ha provider active');
+  }
+
+  // Register compound Claude→HA agent (Claude interprets NL, HA executes)
+  if (CompoundAgent && orc.agents.has('claude') && orc.agents.has('ha')) {
+    const claudeHA = new CompoundAgent([
+      {
+        name: 'claude-interpret', agent: orc.agents.get('claude'),
+        promptTemplate: `Convert this request into a structured HA command. Supported formats:
+- ha:state:{entity_id}
+- ha:service:{domain}/{service}:{json}
+- ha:intent:{room}/{intent}
+- ha:mode:{MODE}
+Safety: No master suite lights, no security lights, no garage/laundry, volume max 70%.
+Request: {task}
+Respond with ONLY the command, nothing else.`
+      },
+      { name: 'ha-execute', agent: orc.agents.get('ha') }
+    ]);
+    orc.registerAgent('claude-ha', '1.0.0', claudeHA, {
+      type: 'compound', provider: 'villa',
+      strengths: ['natural language home control', 'complex home automation', 'villa commands']
+    });
+    console.log('Registered: claude-ha (Claude NL + HA execution)');
+  }
+
+  // Mood override detector — feeds RL with user correction data
+  if (MoodOverrideDetector && process.env.HA_TOKEN && orc.agents.has('ha')) {
+    const overrideDetector = new MoodOverrideDetector({
+      haUrl: process.env.HA_URL || 'http://192.168.1.6:8123',
+      token: process.env.HA_TOKEN,
+      onOverride: (override) => {
+        const contextKey = `mood-${override.context.room || 'unknown'}-${override.context.intent || 'unknown'}-${override.context.timePeriod || 'any'}`;
+        orc.rl.update(contextKey, 'ha', override.satisfaction);
+        orc.eventStore.append('mood-override', 'override.detected', {
+          entityId: override.entityId,
+          drift: override.drift,
+          satisfaction: override.satisfaction,
+          context: override.context
+        });
+      }
+    });
+    overrideDetector.startPolling(10000);
+    orc.overrideDetector = overrideDetector;
+    console.log('Mood: override detector active (10s poll, 5min window)');
   }
 
   // Load plugins from plugins/ directory
