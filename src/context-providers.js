@@ -75,6 +75,14 @@ class ContextManager {
   get providers() {
     return [...this._providers.keys()];
   }
+
+  // Stop all polling providers and clear cache
+  shutdown() {
+    for (const { provider } of this._providers.values()) {
+      if (typeof provider.stop === 'function') provider.stop();
+    }
+    this._cache.clear();
+  }
 }
 
 // --- Built-in Providers ---

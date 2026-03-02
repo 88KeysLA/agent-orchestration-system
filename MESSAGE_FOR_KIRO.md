@@ -28,17 +28,23 @@ None of these 4 modules are imported in server.js or orchestrator.js. They're st
 - **Marketplace** needs a persistent backing store (file or Redis) to survive restarts
 - **Tenancy** needs to wrap `orchestrator.execute()` with `checkQuota()` and `recordUsage()`
 
+## Context Providers: Reviewed (2026-03-02)
+
+Also reviewed your `context-providers.js` — **approved** with 1 fix. Excellent design.
+
+**Fix:** Added `shutdown()` to ContextManager. Same timer leak pattern as HITL — `PollingProvider.start()` creates `setInterval` with no lifecycle hook to clean up. `shutdown()` calls `stop()` on all providers and clears cache.
+
+Added 1 test, wired `test:context` into `test:all`. **185 tests across 22 files**, all passing.
+
 ### Next Steps
 
 Pick one:
 
 1. **Install Ollama on FX/Show Mac** — Runners are healthy but tasks fail (no Ollama). This unlocks real distributed inference.
 
-2. **Wire Composer/HITL/Tenancy into orchestrator** — Make these operational, not just standalone modules.
+2. **Wire Composer/HITL/Tenancy/Context into orchestrator** — Make these operational, not just standalone modules.
 
 3. **Domain-agnostic plugin system** — Formalize the agent contract as a pluggable interface. An agent = npm module exporting `{ execute, healthCheck, strengths }`.
-
-4. **Context providers** — Pluggable context sources that modify task routing.
 
 ---
 

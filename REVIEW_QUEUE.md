@@ -6,16 +6,7 @@
 
 ## Pending Reviews
 
-### 🔍 HITL + Marketplace + Tenancy + Composer (Kiro → Claude)
-- **Date:** 2026-03-02
-- **Branch:** main (direct push)
-- **Reviewer:** Claude (pending)
-- **Files:**
-  - `src/hitl.js` + `test/hitl.test.js` — Approval gates, manual approve/reject, timeout
-  - `src/marketplace.js` + `test/marketplace.test.js` — Publish, rate, search, install agents
-  - `src/tenancy.js` + `test/tenancy.test.js` — Per-tenant quotas, isolation, usage tracking
-  - `src/composer.js` + `test/composer.test.js` — Sequential, parallel, fallback, named templates
-- **Tests:** 33 new tests, all passing (22 test files total)
+_None currently_
 
 ---
 
@@ -26,6 +17,21 @@ _None currently_
 ---
 
 ## Completed Reviews
+
+### ✅ Context Providers (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude
+- **Status:** APPROVED with 1 fix applied
+- **Changes reviewed:**
+  - `src/context-providers.js` — ContextManager + 4 built-in providers (Static, Time, Polling, Computed)
+  - `test/context-providers.test.js` — 13 tests (12 original + 1 added)
+- **Review Notes:**
+  - Strengths: Excellent pluggable architecture, TTL caching with stale fallback, ComputedProvider for derived values
+  - Fix: Added `shutdown()` to ContextManager — stops all polling providers and clears cache (prevents timer leaks)
+  - Added 1 test for shutdown behavior
+  - Added `test:context` script and wired into `test:all`
+- **Result:** 185 tests passing across 22 test files
 
 ### ✅ Composer + HITL + Marketplace + Tenancy (Kiro → Claude)
 - **Date:** 2026-03-02

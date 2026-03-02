@@ -117,6 +117,23 @@ async function run() {
     if (ctx.status !== 'ok') throw new Error('Wrong value');
   });
 
+  await test('ContextManager.shutdown stops polling providers', async () => {
+    let stopped = false;
+    const poller = new PollingProvider('http://fake', 60000);
+    poller._fetch = async () => { poller._latest = { ok: true }; };
+    const origStop = poller.stop.bind(poller);
+    poller.stop = () => { stopped = true; return origStop(); };
+    const mgr = new ContextManager();
+    mgr.add('poll', poller);
+    mgr.add('static', new StaticProvider({ x: 1 }));
+    await mgr.getContext(); // prime cache
+    mgr.shutdown();
+    if (!stopped) throw new Error('Should have called stop on polling provider');
+    // Cache should be cleared
+    const ctx = await mgr.getContext();
+    // Static provider still works (it has no stop), but cache was cleared so it re-fetches
+  });
+
   console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

@@ -122,7 +122,7 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 ### Future Directions (beyond home automation)
 - [ ] **Domain-agnostic agent interface** — Formalize the agent contract (execute, healthCheck, strengths, config)
 - [ ] **Plugin system** — Drop-in agent packages (npm modules) that self-register
-- [ ] **Context providers** — Pluggable context sources (not just sun elevation — could be market data, user activity, CI status)
+- [x] **Context providers** — Pluggable context sources (src/context-providers.js)
 - [ ] **Web UI** — Beyond the villa dashboard — a proper agent management console
 - [x] **Agent Marketplace** — Community-driven agent sharing, ratings (src/marketplace.js)
 - [x] **Multi-tenancy** — Enterprise isolation, quotas (src/tenancy.js)
@@ -162,7 +162,7 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Epsilon Fix** — SimpleRL epsilon=0 was treated as falsy (Claude)
 - [x] **Redis Bus** — Redis pub/sub cross-machine messaging, reviewed + fixed + deployed (Kiro + Claude)
 - [x] **Multi-Machine Agents** — Remote runner + proxy + latency tracking, reviewed + fixed (Kiro + Claude)
-- [x] **172 Tests** — 21 test files, all passing (Kiro + Claude)
+- [x] **185 Tests** — 22 test files, all passing (Kiro + Claude)
 
 ---
 
