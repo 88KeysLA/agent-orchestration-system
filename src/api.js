@@ -12,6 +12,20 @@ function createAPI(orchestrator) {
   const app = express();
   app.use(express.json());
 
+  // Rate limiting — sliding window per IP, zero dependencies
+  const RATE_LIMIT = parseInt(process.env.RATE_LIMIT) || 60;   // requests
+  const RATE_WINDOW = parseInt(process.env.RATE_WINDOW) || 60000; // ms
+  const _hits = new Map();
+  app.use('/api', (req, res, next) => {
+    const ip = req.ip;
+    const now = Date.now();
+    const window = (_hits.get(ip) || []).filter(t => now - t < RATE_WINDOW);
+    if (window.length >= RATE_LIMIT) return res.status(429).json({ error: 'Too many requests' });
+    window.push(now);
+    _hits.set(ip, window);
+    next();
+  });
+
   // API key auth — protects mutating endpoints if API_KEY env var is set
   const API_KEY = process.env.API_KEY;
   if (API_KEY) {

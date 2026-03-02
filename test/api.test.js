@@ -352,6 +352,23 @@ async function testApiKeyGetAllowed() {
   if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
 }
 
+async function testRateLimit() {
+  process.env.RATE_LIMIT = '3';
+  process.env.RATE_WINDOW = '5000';
+  const orc = await setup();
+  // 3 requests should pass
+  for (let i = 0; i < 3; i++) {
+    const res = await fetch(`${baseUrl}/api/status`);
+    if (res.status !== 200) throw new Error(`Request ${i+1} failed: ${res.status}`);
+  }
+  // 4th should be rate limited
+  const res = await fetch(`${baseUrl}/api/status`);
+  await teardown(orc);
+  delete process.env.RATE_LIMIT;
+  delete process.env.RATE_WINDOW;
+  if (res.status !== 429) throw new Error(`Expected 429, got ${res.status}`);
+}
+
 (async () => {
   console.log('Testing REST API...\n');
 
@@ -375,6 +392,7 @@ async function testApiKeyGetAllowed() {
   await test('POST /api/tasks blocked without API key', testApiKeyBlocked);
   await test('POST /api/tasks allowed with correct API key', testApiKeyAllowed);
   await test('GET /api/status allowed without API key', testApiKeyGetAllowed);
+  await test('rate limiter returns 429 after limit exceeded', testRateLimit);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed === 0) {
