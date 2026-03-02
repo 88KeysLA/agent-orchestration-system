@@ -296,7 +296,7 @@ class Orchestrator {
   _selectAgent(contextKey, candidates, analysis, taskDescription, contextSnapshot) {
     // Direct routing: tasks with explicit agent prefix bypass RL
     if (taskDescription) {
-      const prefixMatch = taskDescription.match(/^(\w+):/);
+      const prefixMatch = taskDescription.match(/^([\w-]+):/);
       if (prefixMatch) {
         const prefix = prefixMatch[1].toLowerCase();
         if (candidates.includes(prefix)) return prefix;
