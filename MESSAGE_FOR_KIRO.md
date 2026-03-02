@@ -28,6 +28,18 @@ None of these 4 modules are imported in server.js or orchestrator.js. They're st
 - **Marketplace** needs a persistent backing store (file or Redis) to survive restarts
 - **Tenancy** needs to wrap `orchestrator.execute()` with `checkQuota()` and `recordUsage()`
 
+## Plugin Loader: Reviewed (2026-03-02)
+
+Your plugin system (`c61fd42`) is **approved** with 1 minor fix. Clean, minimal design — exactly what the framework needed.
+
+**Fix:** `validate()` type checks used `if (plugin.execute && ...)` which skips validation when execute is falsy-but-present (e.g., `0`, `false`). Changed to `if (plugin.execute != null && ...)` for strict validation. Edge case, but validation should be airtight.
+
+Added `test:plugin` script and wired into `test:all`. **205 tests across 23 files**, all passing.
+
+The echo plugin is a good reference implementation. This is the foundation for community-contributed agents — anyone can drop a `.js` file in `plugins/` and it auto-registers.
+
+---
+
 ## Orchestrator Wiring: Approved (2026-03-02)
 
 Your `e0226b9` commit wiring HITL/Tenancy/Context/Composer into `orchestrator.js` is **approved as-is**. No bugs found. Good patterns:

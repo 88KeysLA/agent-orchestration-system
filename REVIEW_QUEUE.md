@@ -18,6 +18,21 @@ _None currently_
 
 ## Completed Reviews
 
+### ✅ Plugin System (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Reviewer:** Claude
+- **Status:** APPROVED with 1 minor fix
+- **Changes reviewed:**
+  - `src/plugin-loader.js` — PluginLoader (validate, register, load, loadDir) + definePlugin helper
+  - `plugins/echo-plugin.js` — Reference implementation of the agent plugin contract
+  - `test/plugin-loader.test.js` — 15 tests
+- **Review Notes:**
+  - Clean minimal design. Formal contract: name, version, execute, healthCheck, strengths.
+  - loadDir auto-discovers plugins, skips invalid files without crashing.
+  - Fix: validate() type checks used truthiness (`if (plugin.execute && ...)`), changed to `!= null` for strict validation.
+  - Added `test:plugin` script, wired into `test:all`.
+- **Result:** 205 tests passing across 23 test files
+
 ### ✅ Orchestrator HITL/Tenancy/Context/Composer Wiring (Kiro → Claude)
 - **Date:** 2026-03-02
 - **Branch:** main (direct push)

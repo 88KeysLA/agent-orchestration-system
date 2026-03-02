@@ -120,8 +120,8 @@ This system is **not just a home automation controller**. Villa Romanza is the t
 Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that routes tasks to the best available agent, learns from outcomes, and distributes work across machines.
 
 ### Future Directions (beyond home automation)
-- [ ] **Domain-agnostic agent interface** — Formalize the agent contract (execute, healthCheck, strengths, config)
-- [ ] **Plugin system** — Drop-in agent packages (npm modules) that self-register
+- [x] **Domain-agnostic agent interface** — Formalized as plugin contract (src/plugin-loader.js)
+- [x] **Plugin system** — Drop-in agent packages, PluginLoader.loadDir() auto-discovers (Kiro, reviewed by Claude)
 - [x] **Context providers** — Pluggable context sources (src/context-providers.js)
 - [ ] **Web UI** — Beyond the villa dashboard — a proper agent management console
 - [x] **Agent Marketplace** — Community-driven agent sharing, ratings (src/marketplace.js)
@@ -164,7 +164,8 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Multi-Machine Agents** — Remote runner + proxy + latency tracking, reviewed + fixed (Kiro + Claude)
 - [x] **Orchestrator Wiring** — HITL, Tenancy, Context, Composer integrated into execute() (Kiro, reviewed by Claude)
 - [x] **Ollama on FX/Show Mac** — Distributed inference live, llama3.2:3b on 3 machines (Claude)
-- [x] **190 Tests** — 22 test files, all passing (Kiro + Claude)
+- [x] **Plugin System** — Formal agent contract + PluginLoader + loadDir + example echo plugin (Kiro, reviewed by Claude)
+- [x] **205 Tests** — 23 test files, all passing (Kiro + Claude)
 
 ---
 

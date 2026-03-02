@@ -36,8 +36,8 @@ class PluginLoader {
     for (const field of REQUIRED_FIELDS) {
       if (plugin[field] == null) errors.push(`missing: ${field}`);
     }
-    if (plugin.execute && typeof plugin.execute !== 'function') errors.push('execute must be a function');
-    if (plugin.healthCheck && typeof plugin.healthCheck !== 'function') errors.push('healthCheck must be a function');
+    if (plugin.execute != null && typeof plugin.execute !== 'function') errors.push('execute must be a function');
+    if (plugin.healthCheck != null && typeof plugin.healthCheck !== 'function') errors.push('healthCheck must be a function');
     if (errors.length) throw new Error(`Invalid plugin "${plugin.name || '?'}": ${errors.join(', ')}`);
     return true;
   }
