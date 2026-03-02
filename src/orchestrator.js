@@ -51,7 +51,7 @@ class Orchestrator {
     this.registry.register(name, version, agent, metadata);
     this.registry.setActive(name, version);
 
-    const healthCheck = agent.healthCheck || (async () => true);
+    const healthCheck = agent.healthCheck ? agent.healthCheck.bind(agent) : (async () => true);
     this.health.register(name, healthCheck);
 
     this.bus.subscribe(name, `task.${name}`, async (msg) => {
