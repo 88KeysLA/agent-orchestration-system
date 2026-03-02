@@ -16,10 +16,11 @@ const Orchestrator = require('./src/orchestrator');
 const MultiObjectiveReward = require('./src/multi-objective-reward');
 const createAPI = require('./src/api');
 
-let ClaudeAPIAgent, OllamaAgent, RAGAgent;
+let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent;
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
 try { OllamaAgent = require('./src/agents/ollama-agent'); } catch {}
 try { RAGAgent = require('./src/agents/rag-agent'); } catch {}
+try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
 
 const VILLA_SYSTEM_PROMPT = `You are an AI agent in the Villa Romanza orchestration system.
 Villa Romanza is a large-scale smart home with 76 areas across 5 floors.
@@ -88,6 +89,22 @@ async function main() {
     }
   }
 
+  // Register compound RAG→Ollama agent if both are available
+  if (CompoundAgent && orc.agents.has('rag') && orc.agents.has('ollama')) {
+    const ragOllama = new CompoundAgent([
+      { name: 'rag-retrieval', agent: orc.agents.get('rag') },
+      {
+        name: 'ollama-synthesis', agent: orc.agents.get('ollama'),
+        promptTemplate: `You are a Villa Romanza assistant. Use the following context from the villa knowledge base to answer the question. If the context doesn't contain relevant information, say so and answer from general knowledge.\n\nContext:\n{context}\n\nQuestion: {task}`
+      }
+    ]);
+    orc.registerAgent('rag-ollama', '1.0.0', ragOllama, {
+      type: 'compound', provider: 'villa',
+      strengths: ['villa knowledge', 'synthesized answers', 'device info', 'documentation']
+    });
+    console.log('Registered: rag-ollama (RAG retrieval + Ollama synthesis)');
+  }
+
   // Fallback mock agent so system is never empty
   if (orc.agents.size === 0) {
     orc.registerAgent('mock', '1.0.0', {
@@ -109,6 +126,7 @@ async function main() {
     console.log(`  GET  /api/agents      - List agents`);
     console.log(`  GET  /api/events      - Event history`);
     console.log(`  GET  /api/decisions   - Decision history`);
+    console.log(`  GET  /api/rl-stats    - RL learning state`);
   });
 
   const shutdown = () => {
