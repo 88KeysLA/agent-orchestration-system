@@ -47,19 +47,19 @@ This changes what we should build next. We have real hardware, real AI, and a re
 
 ## PRIORITY: Practical Features
 
-- [ ] **Human-in-the-loop**
-  - Approval gates for high-stakes tasks
-  - Manual intervention points
-  - Feedback collection (thumbs up/down on results)
-  - **Assignee:** TBD
-  - **Status:** Not started
+- [x] **Human-in-the-loop Feedback**
+  - GET /api/tasks/:id — retrieve cached task results
+  - POST /api/tasks/:id/feedback — submit rating (1-5) with RL correction
+  - Task result caching with LRU eviction
+  - **Assignee:** Claude
+  - **Status:** Complete — 10 tests (5 orchestrator + 5 API)
 
-- [ ] **Agent Composition**
-  - Reusable workflow patterns
-  - Composite agents (chain RAG lookup → Ollama summary)
-  - Template system
-  - **Assignee:** TBD
-  - **Status:** Not started
+- [x] **Agent Composition**
+  - CompoundAgent chains N agents in a pipeline
+  - rag-ollama compound: RAG retrieval → Ollama synthesis
+  - Custom prompt templates per stage
+  - **Assignee:** Claude
+  - **Status:** Complete — 8 tests
 
 - [ ] **Multi-Machine Agents**
   - FX Mac (.61), Show Mac (.62) as remote agent hosts
@@ -96,12 +96,17 @@ This changes what we should build next. We have real hardware, real AI, and a re
 - [x] **Claude Agent** — Anthropic API wrapper with lazy SDK loading (Claude)
 - [x] **Ollama Agent** — Local LLM agent with native fetch (Claude)
 - [x] **RAG Agent** — Villa knowledge base query agent (Claude)
-- [x] **REST API** — Express API with 6 endpoints (Claude)
+- [x] **REST API** — Express API with 10 endpoints + dashboard (Claude)
 - [x] **Server** — Auto-registration, Villa-aware system prompts (Claude)
 - [x] **Mech Mac Deployment** — Live on :8406, crontab persistent (Claude)
 - [x] **RL Persistence** — Q-table saves to disk, learning survives restarts (Claude)
 - [x] **Strength-Based Routing** — Agents matched to tasks by strengths on cold start (Claude)
-- [x] **92 Tests** — 14 test files, all passing (Kiro + Claude)
+- [x] **CompoundAgent** — N-stage pipeline with custom prompt templates (Claude)
+- [x] **Feedback API** — Human-in-the-loop RL correction via rating (Claude)
+- [x] **Event Store Persistence** — Events saved to disk with debounced writes (Claude)
+- [x] **Status Dashboard** — HTML dashboard at GET / with agents, RL, events (Claude)
+- [x] **Epsilon Fix** — SimpleRL epsilon=0 was treated as falsy (Claude)
+- [x] **119 Tests** — 15 test files, all passing (Kiro + Claude)
 
 ---
 
@@ -110,7 +115,7 @@ This changes what we should build next. We have real hardware, real AI, and a re
 ### Development Workflow
 ```bash
 # Local development
-npm run test:all        # 92 tests
+npm run test:all        # 119 tests
 
 # Deploy to Mech Mac
 ./deploy.sh             # Pull + restart
@@ -126,6 +131,7 @@ ssh villaromanzamech@192.168.0.60 'tail -f ~/logs/agent-orchestration.log'
 | claude | Cloud API | Complex reasoning, code gen, analysis |
 | ollama | Local LLM | Fast response, zero cost, routine tasks |
 | rag | Local Vector | Villa knowledge, device lookup, docs |
+| rag-ollama | Compound | Synthesized villa knowledge answers |
 
 ### Key Files
 | File | Purpose |

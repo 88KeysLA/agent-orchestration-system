@@ -185,7 +185,93 @@ async function testWorkflowRollback() {
   if (!eventTypes.includes('workflow.failed')) throw new Error('Missing workflow.failed');
 }
 
-// Test 8: Error handling — agent throws, task recorded as failed
+// Test 8: Task result caching and getTask
+async function testGetTask() {
+  const orc = new Orchestrator();
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker'));
+
+  const result = await orc.execute('Do something');
+  const cached = orc.getTask(result.taskId);
+  orc.shutdown();
+
+  if (!cached) throw new Error('Task not found in cache');
+  if (cached.taskId !== result.taskId) throw new Error('Wrong taskId');
+  if (cached.agent !== result.agent) throw new Error('Wrong agent');
+  if (!cached.timestamp) throw new Error('Missing timestamp');
+  if (!cached.contextKey) throw new Error('Missing contextKey');
+}
+
+// Test 9: getTask returns null for unknown task
+async function testGetTaskNotFound() {
+  const orc = new Orchestrator();
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker'));
+
+  const result = orc.getTask('task-nonexistent');
+  orc.shutdown();
+
+  if (result !== null) throw new Error('Should return null for unknown task');
+}
+
+// Test 10: submitFeedback adjusts RL and records event
+async function testSubmitFeedback() {
+  const orc = new Orchestrator();
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker'));
+  orc.rl.epsilon = 0;
+
+  const result = await orc.execute('Do something', 'test-feedback');
+  const qBefore = orc.rl.getQ('test-feedback', result.agent);
+
+  const feedback = orc.submitFeedback(result.taskId, 5, 'Excellent');
+  orc.shutdown();
+
+  if (!feedback) throw new Error('Feedback returned null');
+  if (feedback.rating !== 5) throw new Error(`Wrong rating: ${feedback.rating}`);
+  if (feedback.comment !== 'Excellent') throw new Error('Wrong comment');
+  if (feedback.originalReward !== result.reward) throw new Error('Wrong originalReward');
+
+  // RL should have been updated — Q-value should differ
+  const qAfter = orc.rl.getQ('test-feedback', result.agent);
+  if (qAfter === qBefore) throw new Error('RL not updated after feedback');
+
+  // Event should be recorded
+  const events = orc.eventStore.getEvents(result.taskId);
+  const types = events.map(e => e.eventType);
+  if (!types.includes('task.feedback')) throw new Error('Missing task.feedback event');
+}
+
+// Test 11: submitFeedback returns null for unknown task
+async function testSubmitFeedbackNotFound() {
+  const orc = new Orchestrator();
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker'));
+
+  const result = orc.submitFeedback('task-nonexistent', 3);
+  orc.shutdown();
+
+  if (result !== null) throw new Error('Should return null for unknown task');
+}
+
+// Test 12: Task cache eviction
+async function testCacheEviction() {
+  const orc = new Orchestrator({ maxCachedTasks: 3 });
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker'));
+
+  const ids = [];
+  for (let i = 0; i < 5; i++) {
+    const r = await orc.execute(`Task ${i}`);
+    ids.push(r.taskId);
+  }
+  orc.shutdown();
+
+  // First 2 should be evicted
+  if (orc.getTask(ids[0]) !== null) throw new Error('Task 0 should be evicted');
+  if (orc.getTask(ids[1]) !== null) throw new Error('Task 1 should be evicted');
+  // Last 3 should remain
+  if (!orc.getTask(ids[2])) throw new Error('Task 2 should exist');
+  if (!orc.getTask(ids[3])) throw new Error('Task 3 should exist');
+  if (!orc.getTask(ids[4])) throw new Error('Task 4 should exist');
+}
+
+// Test 13: Error handling — agent throws, task recorded as failed
 async function testErrorHandling() {
   const orc = new Orchestrator();
 
@@ -217,6 +303,11 @@ async function testErrorHandling() {
   await test('Unhealthy agents filtered out', testHealthFiltering);
   await test('Workflow executes steps', testWorkflowExecution);
   await test('Workflow rolls back on failure', testWorkflowRollback);
+  await test('Task result caching and getTask', testGetTask);
+  await test('getTask returns null for unknown', testGetTaskNotFound);
+  await test('submitFeedback adjusts RL', testSubmitFeedback);
+  await test('submitFeedback returns null for unknown', testSubmitFeedbackNotFound);
+  await test('Task cache eviction', testCacheEviction);
   await test('Error handling — agent throws', testErrorHandling);
 
   console.log(`\n${passed} passed, ${failed} failed`);

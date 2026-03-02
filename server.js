@@ -34,7 +34,8 @@ async function main() {
   const scorer = new MultiObjectiveReward();
   const orc = new Orchestrator({
     rewardFn: (result, metadata) => scorer.score(result, metadata),
-    persistPath: path.join(dataDir, 'rl-qtable.json')
+    persistPath: path.join(dataDir, 'rl-qtable.json'),
+    eventStorePath: path.join(dataDir, 'events.json')
   });
 
   // Register Claude agent if API key available
@@ -125,6 +126,8 @@ async function main() {
     console.log(`  GET  /api/status      - System status`);
     console.log(`  GET  /api/agents      - List agents`);
     console.log(`  GET  /api/events      - Event history`);
+    console.log(`  GET  /api/tasks/:id   - Get task result`);
+    console.log(`  POST /api/tasks/:id/feedback - Submit feedback`);
     console.log(`  GET  /api/decisions   - Decision history`);
     console.log(`  GET  /api/rl-stats    - RL learning state`);
   });

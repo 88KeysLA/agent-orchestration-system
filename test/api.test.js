@@ -197,6 +197,107 @@ async function testEventsDefaultLimit() {
   if (data.events.length > 50) throw new Error('Default limit exceeded');
 }
 
+async function testGetTaskById() {
+  const orc = await setup();
+  const createRes = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'Build something' })
+  });
+  const created = await createRes.json();
+
+  const res = await fetch(`${baseUrl}/api/tasks/${created.taskId}`);
+  const data = await res.json();
+  await teardown(orc);
+
+  if (res.status !== 200) throw new Error(`Status ${res.status}`);
+  if (data.taskId !== created.taskId) throw new Error('Wrong taskId');
+  if (data.agent !== created.agent) throw new Error('Wrong agent');
+  if (!data.timestamp) throw new Error('Missing timestamp');
+}
+
+async function testGetTaskNotFound() {
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/api/tasks/task-999`);
+  const data = await res.json();
+  await teardown(orc);
+
+  if (res.status !== 404) throw new Error(`Expected 404, got ${res.status}`);
+  if (!data.error) throw new Error('Missing error message');
+}
+
+async function testPostFeedback() {
+  const orc = await setup();
+  const createRes = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'Build something' })
+  });
+  const created = await createRes.json();
+
+  const res = await fetch(`${baseUrl}/api/tasks/${created.taskId}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating: 5, comment: 'Great job' })
+  });
+  const data = await res.json();
+  await teardown(orc);
+
+  if (res.status !== 200) throw new Error(`Status ${res.status}`);
+  if (data.rating !== 5) throw new Error(`Wrong rating: ${data.rating}`);
+  if (data.comment !== 'Great job') throw new Error('Wrong comment');
+  if (data.taskId !== created.taskId) throw new Error('Wrong taskId');
+  if (typeof data.originalReward !== 'number') throw new Error('Missing originalReward');
+  if (typeof data.adjustedReward !== 'number') throw new Error('Missing adjustedReward');
+}
+
+async function testPostFeedbackBadRating() {
+  const orc = await setup();
+  const createRes = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'Build something' })
+  });
+  const created = await createRes.json();
+
+  const res = await fetch(`${baseUrl}/api/tasks/${created.taskId}/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating: 7 })
+  });
+  const data = await res.json();
+  await teardown(orc);
+
+  if (res.status !== 400) throw new Error(`Expected 400, got ${res.status}`);
+  if (!data.error) throw new Error('Missing error message');
+}
+
+async function testPostFeedbackNotFound() {
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/api/tasks/task-999/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating: 3 })
+  });
+  const data = await res.json();
+  await teardown(orc);
+
+  if (res.status !== 404) throw new Error(`Expected 404, got ${res.status}`);
+}
+
+async function testDashboard() {
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/`);
+  const html = await res.text();
+  await teardown(orc);
+
+  if (res.status !== 200) throw new Error(`Status ${res.status}`);
+  if (!html.includes('Villa Romanza Orchestrator')) throw new Error('Missing title');
+  if (!html.includes('alpha')) throw new Error('Missing agent name');
+  if (!html.includes('Agents')) throw new Error('Missing agents section');
+  if (!html.includes('RL Q-Values')) throw new Error('Missing RL section');
+}
+
 async function testGetRLStats() {
   const orc = await setup();
   // Generate some RL data
@@ -229,6 +330,12 @@ async function testGetRLStats() {
   await test('GET /api/events with limit', testGetEvents);
   await test('GET /api/events default limit', testEventsDefaultLimit);
   await test('GET /api/decisions returns history', testGetDecisions);
+  await test('GET /api/tasks/:id returns task', testGetTaskById);
+  await test('GET /api/tasks/:id 404 not found', testGetTaskNotFound);
+  await test('POST /api/tasks/:id/feedback updates RL', testPostFeedback);
+  await test('POST /api/tasks/:id/feedback 400 bad rating', testPostFeedbackBadRating);
+  await test('POST /api/tasks/:id/feedback 404 not found', testPostFeedbackNotFound);
+  await test('GET / returns dashboard HTML', testDashboard);
   await test('GET /api/rl-stats returns learning state', testGetRLStats);
 
   console.log(`\n${passed} passed, ${failed} failed`);

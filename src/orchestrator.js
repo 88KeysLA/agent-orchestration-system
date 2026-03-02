@@ -21,7 +21,10 @@ class Orchestrator {
       persistPath: options.persistPath || null,
       epsilon: options.epsilon
     });
-    this.eventStore = new EventStore();
+    this.eventStore = new EventStore({
+      persistPath: options.eventStorePath || null,
+      maxPersistedEvents: options.maxPersistedEvents || 5000
+    });
     this.registry = new AgentRegistry();
     this.health = new HealthMonitor({
       checkInterval: options.healthCheckInterval || 10000,
@@ -37,6 +40,8 @@ class Orchestrator {
     this.agents = new Map();
     this._agentMeta = new Map();
     this._taskCounter = 0;
+    this._taskResults = new Map(); // Cache for feedback
+    this._maxCachedTasks = options.maxCachedTasks || 200;
   }
 
   registerAgent(name, version, agent, metadata = {}) {
@@ -133,17 +138,28 @@ class Orchestrator {
     const reward = success ? this.rewardFn(result, metadata) : 0;
     this.rl.update(contextKey, selectedAgent, reward);
 
-    return {
+    const taskResult = {
       taskId,
       result,
       success,
       agent: selectedAgent,
+      contextKey,
       analysis,
       explanation: this.explainer.explain(decisionId),
       reward,
       duration,
-      tokens
+      tokens,
+      timestamp: new Date().toISOString()
     };
+
+    // Cache for feedback lookups (evict oldest if over limit)
+    this._taskResults.set(taskId, taskResult);
+    if (this._taskResults.size > this._maxCachedTasks) {
+      const oldest = this._taskResults.keys().next().value;
+      this._taskResults.delete(oldest);
+    }
+
+    return taskResult;
   }
 
   async executeWorkflow(taskDescription) {
@@ -268,6 +284,38 @@ class Orchestrator {
     return best;
   }
 
+  getTask(taskId) {
+    return this._taskResults.get(taskId) || null;
+  }
+
+  submitFeedback(taskId, rating, comment) {
+    const task = this._taskResults.get(taskId);
+    if (!task) return null;
+
+    // Convert 1-5 rating to RL reward adjustment
+    // 1=terrible(-50), 2=bad(-20), 3=neutral(0), 4=good(+20), 5=excellent(+50)
+    const rewardMap = { 1: -50, 2: -20, 3: 0, 4: 20, 5: 50 };
+    const adjustment = rewardMap[rating] || 0;
+
+    this.rl.update(task.contextKey, task.agent, task.reward + adjustment);
+
+    const feedback = {
+      taskId,
+      agent: task.agent,
+      contextKey: task.contextKey,
+      rating,
+      comment: comment || null,
+      originalReward: task.reward,
+      adjustedReward: task.reward + adjustment,
+      timestamp: new Date().toISOString()
+    };
+
+    this.eventStore.append(taskId, 'task.feedback', feedback);
+    task.feedback = feedback;
+
+    return feedback;
+  }
+
   getStatus() {
     return {
       agents: this.health.getStatus(),
@@ -279,6 +327,7 @@ class Orchestrator {
 
   shutdown() {
     this.health.stop();
+    this.eventStore.flush();
   }
 }
 

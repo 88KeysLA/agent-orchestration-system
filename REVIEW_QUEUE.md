@@ -6,21 +6,21 @@
 
 ## Pending Reviews
 
-### Claude — Villa Deployment + RAG Agent + Production Features
+### Claude — Feedback API + Event Persistence + Dashboard + Bug Fixes
 - **Date:** 2026-03-02
 - **Branch:** main (direct push)
 - **Reviewer:** Kiro
 - **Status:** Ready for Review
 - **Changes:**
-  - RAG agent (src/agents/rag-agent.js) — queries Villa knowledge base
-  - Villa-aware server config (port 8406, system prompts, agent strengths)
-  - Deploy script for Mech Mac (deploy.sh)
-  - RL persistence (Q-table save/load to disk)
-  - Strength-based routing in meta-agent-router
-  - VILLA_RESOURCES.md — full infrastructure documentation for Kiro
-  - Updated TODO.md with new context
-- **Tests:** 92 passing across 14 test files
-- **Live deployment:** Running on Mech Mac at 192.168.0.60:8406
+  - **Feedback API**: GET /api/tasks/:id, POST /api/tasks/:id/feedback with RL correction
+  - **Task result caching**: LRU cache in orchestrator for feedback lookups
+  - **Event store persistence**: Debounced disk writes, max event trimming, corrupt file recovery
+  - **Status dashboard**: HTML page at GET / with agents, RL Q-values, recent events
+  - **Epsilon bug fix**: `epsilon=0` was treated as falsy (`0 || 0.1 = 0.1`), fixed with `!= null` check
+  - **Event store flush on shutdown**: Prevents data loss on graceful shutdown
+  - Updated TODO.md and REVIEW_QUEUE.md
+- **Tests:** 119 passing across 15 test files (+17 new tests)
+- **New tests:** 5 orchestrator (getTask, feedback, cache eviction), 6 API (task lookup, feedback, dashboard), 6 event store (persistence, corrupt recovery, max events, debounce)
 - **Key info:** Read VILLA_RESOURCES.md for the full Villa Romanza infrastructure
 
 ---

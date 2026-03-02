@@ -5,7 +5,7 @@ class SimpleRL {
   constructor(options = {}) {
     this.qValues = new Map();
     this.counts = new Map();
-    this.epsilon = options.epsilon || 0.1;
+    this.epsilon = options.epsilon != null ? options.epsilon : 0.1;
     this.persistPath = options.persistPath || null;
 
     if (this.persistPath) {
