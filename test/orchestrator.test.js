@@ -310,6 +310,74 @@ async function testErrorHandling() {
   await test('Task cache eviction', testCacheEviction);
   await test('Error handling — agent throws', testErrorHandling);
 
+  // HITL integration
+  await test('HITL gate blocks task until approved', async () => {
+    const HITL = require('../src/hitl');
+    const hitl = new HITL({ timeout: 5000 });
+    hitl.addGate('delete', async () => {});
+    const orc = new Orchestrator({ hitl });
+    orc.registerAgent('a', '1.0.0', { execute: async () => 'done', healthCheck: async () => true }, {});
+    const promise = orc.execute('delete all files');
+    await new Promise(r => setTimeout(r, 20));
+    hitl.approve(orc._taskCounter > 0 ? `task-${orc._taskCounter}` : 'task-1');
+    const result = await promise;
+    if (!result.success) throw new Error(`Should succeed after approval: ${result.result}`);
+    hitl.shutdown();
+  });
+
+  await test('HITL gate rejects task', async () => {
+    const HITL = require('../src/hitl');
+    const hitl = new HITL({ timeout: 5000 });
+    hitl.addGate('danger', async () => {});
+    const orc = new Orchestrator({ hitl });
+    orc.registerAgent('a', '1.0.0', { execute: async () => 'done', healthCheck: async () => true }, {});
+    const promise = orc.execute('danger zone');
+    await new Promise(r => setTimeout(r, 20));
+    const taskId = `task-${orc._taskCounter}`;
+    hitl.reject(taskId, 'too risky');
+    const result = await promise;
+    if (result.approved !== false) throw new Error('Should be rejected');
+    hitl.shutdown();
+  });
+
+  // Tenancy integration
+  await test('Tenancy quota enforced in execute()', async () => {
+    const TenantManager = require('../src/tenancy');
+    const tenancy = new TenantManager();
+    tenancy.create('t1', { tasksPerHour: 1 });
+    const orc = new Orchestrator({ tenancy });
+    orc.registerAgent('a', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
+    await orc.execute('task 1', null, { tenantId: 't1' });
+    let threw = false;
+    try { await orc.execute('task 2', null, { tenantId: 't1' }); } catch { threw = true; }
+    if (!threw) throw new Error('Should throw on quota exceeded');
+  });
+
+  // Context provider integration
+  await test('Context snapshot included in task result events', async () => {
+    const { ContextManager, StaticProvider } = require('../src/context-providers');
+    const ctx = new ContextManager();
+    ctx.add('env', new StaticProvider({ region: 'villa' }));
+    const orc = new Orchestrator({ context: ctx });
+    orc.registerAgent('a', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
+    await orc.execute('some task');
+    const events = orc.eventStore.getAllEvents();
+    const started = events.find(e => e.eventType === 'task.started');
+    if (!started || !started.data.contextSnapshot) throw new Error('Missing contextSnapshot in event');
+    if (started.data.contextSnapshot.env.region !== 'villa') throw new Error('Wrong context value');
+    ctx.shutdown();
+  });
+
+  // Composer integration
+  await test('Composer available on orchestrator with registered agents', async () => {
+    const orc = new Orchestrator();
+    orc.registerAgent('a', '1.0.0', { execute: async t => `A:${t}`, healthCheck: async () => true }, {});
+    orc.registerAgent('b', '1.0.0', { execute: async t => `B:${t}`, healthCheck: async () => true }, {});
+    orc.composer.define('a-then-b', [{ agent: 'a' }, { agent: 'b' }]);
+    const { result } = await orc.composer.run('a-then-b', 'hello');
+    if (result !== 'B:A:hello') throw new Error(`Wrong: ${result}`);
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed === 0) {
     console.log('\u2705 All orchestrator tests passed!\n');

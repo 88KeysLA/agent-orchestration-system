@@ -12,6 +12,7 @@ const HealthMonitor = require('./health-monitor');
 const Explainer = require('./explainer');
 const DynamicReplanner = require('./replanner');
 const Saga = require('./saga');
+const AgentComposer = require('./composer');
 const { analyzeTask, selectAgents, generateWorkflow } = require('./meta-agent-router');
 
 class Orchestrator {
@@ -40,8 +41,14 @@ class Orchestrator {
     this.agents = new Map();
     this._agentMeta = new Map();
     this._taskCounter = 0;
-    this._taskResults = new Map(); // Cache for feedback
+    this._taskResults = new Map();
     this._maxCachedTasks = options.maxCachedTasks || 200;
+
+    // Optional pluggable components
+    this.hitl = options.hitl || null;
+    this.tenancy = options.tenancy || null;
+    this.context = options.context || null;
+    this.composer = new AgentComposer();
   }
 
   registerAgent(name, version, agent, metadata = {}) {
@@ -53,6 +60,7 @@ class Orchestrator {
 
     const healthCheck = agent.healthCheck ? agent.healthCheck.bind(agent) : (async () => true);
     this.health.register(name, healthCheck);
+    this.composer.addAgent(name, agent);
 
     this.bus.subscribe(name, `task.${name}`, async (msg) => {
       try {
@@ -66,13 +74,33 @@ class Orchestrator {
     this.eventStore.append(name, 'agent.registered', { name, version, metadata });
   }
 
-  async execute(taskDescription, context) {
+  async execute(taskDescription, context, options = {}) {
     const taskId = `task-${++this._taskCounter}`;
     const startTime = Date.now();
+    const tenantId = options.tenantId || null;
 
     // 1. Analyze task via meta-router
     const analysis = analyzeTask(taskDescription);
     const contextKey = context || `${analysis.taskType}-${analysis.domain}`;
+
+    // 2. HITL gate — check before doing anything expensive
+    if (this.hitl) {
+      const { approved, reason } = await this.hitl.check(taskId, taskDescription);
+      if (!approved) {
+        this.eventStore.append(taskId, 'task.rejected', { reason, task: taskDescription });
+        return { taskId, success: false, result: `Task rejected: ${reason}`, approved: false };
+      }
+    }
+
+    // 3. Tenancy quota check
+    let releaseQuota = null;
+    if (this.tenancy && tenantId) {
+      this.tenancy.checkQuota(tenantId); // throws if over limit
+      releaseQuota = this.tenancy.recordUsage(tenantId);
+    }
+
+    // 4. Get context snapshot (influences routing metadata)
+    const contextSnapshot = this.context ? await this.context.getContext() : null;
 
     // 2. Get available agents, filter unhealthy
     const agentNames = Array.from(this.agents.keys());
@@ -110,7 +138,7 @@ class Orchestrator {
 
     // 5. Event: task started
     this.eventStore.append(taskId, 'task.started', {
-      task: taskDescription, agent: selectedAgent, analysis, decisionId
+      task: taskDescription, agent: selectedAgent, analysis, decisionId, tenantId, contextSnapshot
     });
 
     // 6. Execute agent
@@ -129,12 +157,14 @@ class Orchestrator {
       this.eventStore.append(taskId, 'task.failed', {
         agent: selectedAgent, error: error.message
       });
+    } finally {
+      if (releaseQuota) releaseQuota();
     }
 
     // 7. Update RL with reward (pass metadata for multi-objective scoring)
     const duration = Date.now() - startTime;
     const tokens = this.agents.get(selectedAgent).lastUsage || null;
-    const metadata = { duration, agent: selectedAgent, analysis, tokens, task: taskDescription };
+    const metadata = { duration, agent: selectedAgent, analysis, tokens, task: taskDescription, contextSnapshot };
     const reward = success ? this.rewardFn(result, metadata) : 0;
     this.rl.update(contextKey, selectedAgent, reward);
 
@@ -149,6 +179,7 @@ class Orchestrator {
       reward,
       duration,
       tokens,
+      tenantId,
       timestamp: new Date().toISOString()
     };
 
@@ -328,6 +359,8 @@ class Orchestrator {
   shutdown() {
     this.health.stop();
     this.eventStore.flush();
+    if (this.hitl) this.hitl.shutdown();
+    if (this.context) this.context.shutdown();
   }
 }
 
