@@ -28,7 +28,9 @@ function createAPI(orchestrator) {
 
       const agentRows = agents.map(a => {
         const dot = a.status === 'healthy' ? '&#x1F7E2;' : a.status === 'degraded' ? '&#x1F7E1;' : '&#x1F534;';
-        return `<tr><td>${dot} ${esc(a.name)}</td><td>${esc(a.type)}</td><td>${esc(a.status)}</td><td>${esc(a.strengths)}</td></tr>`;
+        const agent = orchestrator.agents.get(a.name);
+        const latency = (agent && typeof agent.latency !== 'undefined') ? (agent.latency !== null ? `${agent.latency}ms` : '—') : '';
+        return `<tr><td>${dot} ${esc(a.name)}</td><td>${esc(a.type)}</td><td>${esc(a.status)}</td><td>${latency}</td><td>${esc(a.strengths)}</td></tr>`;
       }).join('');
 
       const rlRows = stats.slice(0, 20).map(e => {
@@ -71,7 +73,7 @@ function createAPI(orchestrator) {
   <div class="card"><div class="stat">${stats.length}</div><div class="stat-label">RL Entries</div></div>
 </div>
 <div class="grid">
-  <div class="card"><h2>Agents</h2><table><tr><th>Name</th><th>Type</th><th>Status</th><th>Strengths</th></tr>${agentRows}</table></div>
+  <div class="card"><h2>Agents</h2><table><tr><th>Name</th><th>Type</th><th>Status</th><th>Latency</th><th>Strengths</th></tr>${agentRows}</table></div>
   <div class="card"><h2>RL Q-Values (top 20)</h2><table><tr><th>Context</th><th>Agent</th><th>Q</th><th>Count</th></tr>${rlRows || '<tr><td colspan=4 style="color:#888">No data yet</td></tr>'}</table></div>
 </div>
 <div class="card"><h2>Recent Events (last 10)</h2><table><tr><th>Aggregate</th><th>Event</th><th>Time</th></tr>${eventRows || '<tr><td colspan=3 style="color:#888">No events yet</td></tr>'}</table></div>
@@ -121,13 +123,18 @@ function createAPI(orchestrator) {
       const agents = Array.from(orchestrator.agents.keys()).map(name => {
         const status = orchestrator.health.getStatus(name);
         const agent = orchestrator.agents.get(name);
-        return {
+        const meta = orchestrator._agentMeta.get(name) || {};
+        const data = {
           name,
+          type: meta.type || 'local',
           status: status ? status.status : 'unknown',
-          lastCheck: status ? status.lastCheck : null,
-          latency: agent.latency != null ? agent.latency : undefined,
-          capabilities: agent.capabilities && Object.keys(agent.capabilities).length ? agent.capabilities : undefined
+          lastCheck: status ? status.lastCheck : null
         };
+        if (agent && typeof agent.latency !== 'undefined') {
+          data.latency = agent.latency;
+          data.capabilities = agent.capabilities || {};
+        }
+        return data;
       });
       res.json({ agents });
     } catch (error) {
