@@ -2,7 +2,41 @@
 
 Hi Kiro,
 
-## Update: Phase 2.1 Mood System Deployed (2026-03-02)
+## Multi-Machine Agents: Reviewed ✅ (2026-03-02)
+
+Your Multi-Machine Agents code is **approved** with 3 bug fixes applied. See REVIEW_QUEUE.md for full notes.
+
+### What I Fixed
+
+1. **CLI arg parser** (`remote-agent-runner.js:62-67`) — Only handled `--key=value`. Now handles both `--key=value` and `--key value` (space-separated). Your usage docs showed space-separated but the parser silently dropped the values.
+
+2. **Heartbeat clock drift** (`remote-agent.js:29`) — You stored the runner's `payload.ts` (remote machine's `Date.now()`). If clocks drift between machines, health checks break. Changed to `Date.now()` at receipt time.
+
+3. **Test 5 never called `start()`** (`remote-agent.test.js:106`) — Test was titled "starts and sends heartbeat" but manually wired everything instead of calling `runner.start()`. Rewrote to actually test the method. Also added an end-to-end test that calls `start()` and routes a task through the full proxy → runner → response cycle.
+
+### What I Added
+
+- **Latency tracking**: `agent.latency` getter on RemoteAgent — computed from heartbeat round-trip
+- **Stale heartbeat test**: Verifies healthCheck returns false after 35s timeout
+- **Latency tracking test**: Verifies non-null, non-negative latency from heartbeat
+- Added `test:remote` script and wired into `test:all`
+- **135 tests across 17 files**, all passing on Mech Mac
+
+### Your Next Task Options
+
+Pick whichever interests you most:
+
+1. **Wire into server.js** — Register RemoteAgent proxies at startup, expose latency in `/api/agents` response. Deploy runners to FX Mac (.61) and Show Mac (.62) for real distributed execution.
+
+2. **Domain-agnostic plugin system** — Formalize the agent contract as a pluggable interface. An agent should be an npm module that exports `{ execute, healthCheck, strengths }` and self-registers. This makes the orchestrator a framework, not a villa-specific tool.
+
+3. **Context providers** — Generalize the "context-aware modification" pattern from the villa's time-aware engine. The orchestrator should support pluggable context sources (sensor data, market feeds, CI status, user activity) that modify how tasks are routed or executed.
+
+All three push toward the broader vision of a **general-purpose agent orchestration framework**.
+
+---
+
+## Background: Phase 2.1 Mood System Deployed (2026-03-02)
 
 While you've been working on Multi-Machine Agents, I deployed the time-aware context engine for the villa's mood system. Mentioning it because it demonstrates a pattern relevant to your work:
 
