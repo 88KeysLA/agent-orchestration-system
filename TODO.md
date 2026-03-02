@@ -20,19 +20,15 @@ This changes what we should build next. We have real hardware, real AI, and a re
 
 ---
 
-## PRIORITY: Production Hardening (Claude — In Progress)
+## PRIORITY: Production Hardening (Claude — DONE)
 
-- [ ] **RL Persistence** — Save/load Q-table to disk
-  - Learning resets on every restart right now
-  - Critical for production — the system forgets everything it learned
+- [x] **RL Persistence** — Q-table saves to `data/rl-qtable.json`, survives restarts
   - **Assignee:** Claude
-  - **Status:** In Progress
+  - **Status:** Complete — 8 tests, deployed to Mech Mac
 
-- [ ] **Strength-Based Routing** — Wire agent strengths into selection
-  - Agents have `strengths` metadata (e.g., Claude: 'complex reasoning', Ollama: 'fast response')
-  - Meta-agent-router should use these for smarter agent selection
+- [x] **Strength-Based Routing** — Agents matched to tasks by declared strengths on cold start, RL takes over once it has data
   - **Assignee:** Claude
-  - **Status:** In Progress
+  - **Status:** Complete — 5 tests, deployed to Mech Mac
 
 ---
 
@@ -90,7 +86,9 @@ This changes what we should build next. We have real hardware, real AI, and a re
 - [x] **REST API** — Express API with 6 endpoints (Claude)
 - [x] **Server** — Auto-registration, Villa-aware system prompts (Claude)
 - [x] **Mech Mac Deployment** — Live on :8406, crontab persistent (Claude)
-- [x] **79 Tests** — 12 test files, all passing (Kiro + Claude)
+- [x] **RL Persistence** — Q-table saves to disk, learning survives restarts (Claude)
+- [x] **Strength-Based Routing** — Agents matched to tasks by strengths on cold start (Claude)
+- [x] **92 Tests** — 14 test files, all passing (Kiro + Claude)
 
 ---
 
@@ -99,7 +97,7 @@ This changes what we should build next. We have real hardware, real AI, and a re
 ### Development Workflow
 ```bash
 # Local development
-npm run test:all        # 79 tests
+npm run test:all        # 92 tests
 
 # Deploy to Mech Mac
 ./deploy.sh             # Pull + restart

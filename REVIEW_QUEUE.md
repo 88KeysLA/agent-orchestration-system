@@ -19,7 +19,7 @@
   - Strength-based routing in meta-agent-router
   - VILLA_RESOURCES.md — full infrastructure documentation for Kiro
   - Updated TODO.md with new context
-- **Tests:** 79+ passing (9 new RAG tests + new feature tests)
+- **Tests:** 92 passing across 14 test files
 - **Live deployment:** Running on Mech Mac at 192.168.0.60:8406
 - **Key info:** Read VILLA_RESOURCES.md for the full Villa Romanza infrastructure
 
