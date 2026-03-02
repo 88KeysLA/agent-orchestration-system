@@ -6,7 +6,10 @@
   "scripts": {
     "demo:bus": "node examples/message-bus-demo.js",
     "demo:rl": "node examples/simple-rl-demo.js",
+    "demo:orchestrator": "node demos/orchestrator-demo.js",
     "test": "node test/message-bus.test.js",
+    "test:orchestrator": "node test/orchestrator.test.js",
+    "test:all": "node test/message-bus.test.js && node test/saga.test.js && node test/event-store.test.js && node test/registry.test.js && node test/health-monitor.test.js && node test/explainer.test.js && node test/replanner.test.js && node test/orchestrator.test.js",
     "bootstrap": "node bootstrap.js"
   },
   "keywords": ["agents", "orchestration", "ai", "reinforcement-learning"],

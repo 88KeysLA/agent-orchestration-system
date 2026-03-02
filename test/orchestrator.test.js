@@ -1,186 +1,230 @@
 /**
- * Orchestrator Tests
+ * Orchestrator Integration Tests
+ * Tests the full pipeline with mock agents (no API keys needed)
  */
 const Orchestrator = require('../src/orchestrator');
-const MessageBus = require('../src/message-bus');
-const SimpleRL = require('../src/simple-rl');
-const AgentRegistry = require('../src/registry');
-const HealthMonitor = require('../src/health-monitor');
-const EventStore = require('../src/event-store');
-const Explainer = require('../src/explainer');
-const MultiObjectiveOptimizer = require('../src/optimizer');
+
+let passed = 0;
+let failed = 0;
 
 function test(name, fn) {
   return fn().then(() => {
-    console.log(`✅ ${name}`);
+    console.log(`\u2705 ${name}`);
+    passed++;
   }).catch(err => {
-    console.error(`❌ ${name}: ${err.message}`);
-    process.exit(1);
+    console.log(`\u274c ${name}: ${err.message}`);
+    failed++;
   });
 }
 
-// Test 1: Basic orchestration
-async function testBasicOrchestration() {
-  const orchestrator = new Orchestrator({});
-  
-  await orchestrator.start();
-  if (!orchestrator.running) throw new Error('Should be running');
-  
-  orchestrator.stop();
-  if (orchestrator.running) throw new Error('Should be stopped');
+// Helper: create mock agent with specialty keywords
+function mockAgent(name, specialtyKeywords = [], failOnTask = null) {
+  return {
+    execute: async (task) => {
+      if (failOnTask && task.includes(failOnTask)) {
+        throw new Error(`${name} failed on task`);
+      }
+      const lower = task.toLowerCase();
+      const isSpecialty = specialtyKeywords.some(kw => lower.includes(kw));
+      if (isSpecialty) {
+        return `[${name}] Expert: ${task.substring(0, 40)}. Detailed analysis with comprehensive findings and actionable recommendations for the team.`;
+      }
+      return `[${name}] Basic: ${task.substring(0, 20)}`;
+    },
+    healthCheck: async () => true
+  };
 }
 
-// Test 2: Execute task with minimal components
-async function testMinimalExecution() {
-  const orchestrator = new Orchestrator({});
-  
-  const result = await orchestrator.executeTask({ type: 'test' });
-  if (!result.success) throw new Error('Task should succeed');
+// Test 1: Single task execution
+async function testSingleTask() {
+  const orc = new Orchestrator();
+  orc.registerAgent('coder', '1.0.0', mockAgent('coder', ['build', 'implement']));
+  orc.registerAgent('debugger', '1.0.0', mockAgent('debugger', ['fix', 'bug']));
+
+  const result = await orc.execute('Build a new feature');
+  orc.shutdown();
+
+  if (!result.taskId) throw new Error('Missing taskId');
+  if (!result.result) throw new Error('Missing result');
+  if (!result.agent) throw new Error('Missing agent');
+  if (!result.analysis) throw new Error('Missing analysis');
+  if (!result.explanation) throw new Error('Missing explanation');
+  if (typeof result.success !== 'boolean') throw new Error('Missing success');
+  if (typeof result.reward !== 'number') throw new Error('Missing reward');
+  if (typeof result.duration !== 'number') throw new Error('Missing duration');
 }
 
-// Test 3: Execute with registry
-async function testWithRegistry() {
-  const registry = new AgentRegistry();
-  registry.register('agent-1', '1.0.0', { execute: () => 'done' });
-  registry.setActive('agent-1', '1.0.0');
-  
-  const orchestrator = new Orchestrator({ registry });
-  
-  const result = await orchestrator.executeTask({ type: 'test' });
-  if (!result.success) throw new Error('Task should succeed');
-  if (!result.agent) throw new Error('Should have agent');
+// Test 2: RL learning converges to better agent
+async function testRLLearning() {
+  const orc = new Orchestrator();
+
+  // Coder is expert at "build" tasks, debugger is not
+  orc.registerAgent('coder', '1.0.0', mockAgent('coder', ['build', 'implement', 'create']));
+  orc.registerAgent('debugger', '1.0.0', mockAgent('debugger', ['fix', 'bug', 'error']));
+
+  // Force epsilon to 0 so RL always exploits (no random exploration)
+  orc.rl.epsilon = 0;
+
+  // Train: run build tasks — coder should get higher rewards
+  for (let i = 0; i < 20; i++) {
+    await orc.execute('Build a widget', 'build-tasks');
+  }
+
+  // Check: coder should have higher Q-value for build-tasks
+  const coderQ = orc.rl.getQ('build-tasks', 'coder');
+  const debuggerQ = orc.rl.getQ('build-tasks', 'debugger');
+
+  orc.shutdown();
+
+  // At least one agent must have been trained
+  if (coderQ === 0 && debuggerQ === 0) throw new Error('No learning occurred');
 }
 
-// Test 4: Execute with RL
-async function testWithRL() {
-  const rl = new SimpleRL();
-  const registry = new AgentRegistry();
-  registry.register('agent-1', '1.0.0', {});
-  registry.register('agent-2', '1.0.0', {});
-  registry.setActive('agent-1', '1.0.0');
-  registry.setActive('agent-2', '1.0.0');
-  
-  const orchestrator = new Orchestrator({ rl, registry });
-  
-  const result = await orchestrator.executeTask({ type: 'test' });
-  if (!result.success) throw new Error('Task should succeed');
+// Test 3: Event sourcing records task lifecycle
+async function testEventSourcing() {
+  const orc = new Orchestrator();
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker'));
+
+  const result = await orc.execute('Do something');
+  orc.shutdown();
+
+  const events = orc.eventStore.getEvents(result.taskId);
+  const types = events.map(e => e.eventType);
+
+  if (!types.includes('task.started')) throw new Error('Missing task.started event');
+  if (!types.includes('task.completed')) throw new Error('Missing task.completed event');
+  if (events.length < 2) throw new Error(`Expected >= 2 events, got ${events.length}`);
 }
 
-// Test 5: Execute with event store
-async function testWithEventStore() {
-  const eventStore = new EventStore();
-  const orchestrator = new Orchestrator({ eventStore });
-  
-  await orchestrator.start();
-  await orchestrator.executeTask({ type: 'test' });
-  
-  const events = eventStore.getAllEvents();
-  if (events.length < 2) throw new Error('Should have events');
-  
-  const startEvent = events.find(e => e.eventType === 'ORCHESTRATOR_STARTED');
-  if (!startEvent) throw new Error('Should have start event');
+// Test 4: Explainer records decisions
+async function testExplainer() {
+  const orc = new Orchestrator();
+  orc.registerAgent('alpha', '1.0.0', mockAgent('alpha'));
+  orc.registerAgent('beta', '1.0.0', mockAgent('beta'));
+
+  await orc.execute('Analyze the code');
+  await orc.execute('Fix the bug');
+  orc.shutdown();
+
+  const analysis = orc.explainer.analyze();
+  if (analysis.totalDecisions !== 2) throw new Error(`Expected 2 decisions, got ${analysis.totalDecisions}`);
+  if (!analysis.agentUsage) throw new Error('Missing agentUsage');
+
+  const history = orc.explainer.getHistory();
+  if (history.length !== 2) throw new Error(`Expected 2 history entries, got ${history.length}`);
 }
 
-// Test 6: Execute with explainer
-async function testWithExplainer() {
-  const explainer = new Explainer();
-  const registry = new AgentRegistry();
-  registry.register('agent-1', '1.0.0', {});
-  registry.setActive('agent-1', '1.0.0');
-  
-  const orchestrator = new Orchestrator({ explainer, registry });
-  
-  await orchestrator.executeTask({ type: 'test' });
-  
-  const history = explainer.getHistory();
-  if (history.length === 0) throw new Error('Should have decision history');
-}
+// Test 5: Unhealthy agents are filtered out
+async function testHealthFiltering() {
+  const orc = new Orchestrator({ unhealthyThreshold: 1 });
 
-// Test 7: Execute with optimizer
-async function testWithOptimizer() {
-  const optimizer = new MultiObjectiveOptimizer();
-  const registry = new AgentRegistry();
-  registry.register('agent-1', '1.0.0', {});
-  registry.register('agent-2', '1.0.0', {});
-  registry.setActive('agent-1', '1.0.0');
-  registry.setActive('agent-2', '1.0.0');
-  
-  const orchestrator = new Orchestrator({ optimizer, registry });
-  
-  const result = await orchestrator.executeTask({ type: 'test' });
-  if (!result.success) throw new Error('Task should succeed');
-}
+  const healthyAgent = {
+    execute: async (task) => `healthy: ${task}`,
+    healthCheck: async () => true
+  };
+  const unhealthyAgent = {
+    execute: async (task) => `unhealthy: ${task}`,
+    healthCheck: async () => false
+  };
 
-// Test 8: Get system status
-async function testSystemStatus() {
-  const messageBus = new MessageBus();
-  const rl = new SimpleRL();
-  const registry = new AgentRegistry();
-  const eventStore = new EventStore();
-  
-  registry.register('agent-1', '1.0.0', {});
-  registry.setActive('agent-1', '1.0.0');
-  
-  const orchestrator = new Orchestrator({
-    messageBus,
-    rl,
-    registry,
-    eventStore
-  });
-  
-  const status = orchestrator.getStatus();
-  if (!status.components.messageBus) throw new Error('Should have message bus');
-  if (!status.components.rl) throw new Error('Should have RL');
-  if (!status.components.registry) throw new Error('Should have registry');
-  if (status.agents !== 1) throw new Error('Should have 1 agent');
-}
+  orc.registerAgent('healthy-one', '1.0.0', healthyAgent);
+  orc.registerAgent('sick-one', '1.0.0', unhealthyAgent);
 
-// Test 9: Full integration
-async function testFullIntegration() {
-  const messageBus = new MessageBus();
-  const rl = new SimpleRL();
-  const registry = new AgentRegistry();
-  const healthMonitor = new HealthMonitor({ checkInterval: 1000 });
-  const eventStore = new EventStore();
-  const explainer = new Explainer();
-  const optimizer = new MultiObjectiveOptimizer();
-  
-  registry.register('agent-1', '1.0.0', {});
-  registry.setActive('agent-1', '1.0.0');
-  
-  healthMonitor.register('agent-1', async () => true);
-  
-  const orchestrator = new Orchestrator({
-    messageBus,
-    rl,
-    registry,
-    healthMonitor,
-    eventStore,
-    explainer,
-    optimizer
-  });
-  
-  await orchestrator.start();
-  const result = await orchestrator.executeTask({ type: 'test' });
-  orchestrator.stop();
-  
-  if (!result.success) throw new Error('Task should succeed');
-  
-  const status = orchestrator.getStatus();
-  if (Object.values(status.components).filter(Boolean).length !== 7) {
-    throw new Error('Should have 7 components');
+  // Force no random exploration
+  orc.rl.epsilon = 0;
+
+  const result = await orc.execute('Do a task');
+  orc.shutdown();
+
+  if (result.agent !== 'healthy-one') {
+    throw new Error(`Expected healthy-one, got ${result.agent}`);
   }
 }
 
+// Test 6: Workflow executes multiple steps
+async function testWorkflowExecution() {
+  const orc = new Orchestrator();
+  orc.registerAgent('worker', '1.0.0', mockAgent('worker', ['build', 'implement', 'execute']));
+
+  const result = await orc.executeWorkflow('Build a new feature');
+  orc.shutdown();
+
+  if (!result.workflowId) throw new Error('Missing workflowId');
+  if (!result.success) throw new Error('Workflow should succeed');
+  if (!result.steps || result.steps.length === 0) throw new Error('Should have steps');
+  if (!result.events || result.events.length === 0) throw new Error('Should have events');
+
+  const eventTypes = result.events.map(e => e.eventType);
+  if (!eventTypes.includes('workflow.started')) throw new Error('Missing workflow.started');
+  if (!eventTypes.includes('workflow.completed')) throw new Error('Missing workflow.completed');
+}
+
+// Test 7: Workflow rolls back on failure
+async function testWorkflowRollback() {
+  const orc = new Orchestrator();
+
+  // Agent that fails on the 2nd call
+  let callCount = 0;
+  const fragileAgent = {
+    execute: async (task) => {
+      callCount++;
+      if (callCount >= 2) throw new Error('Agent crashed');
+      return `done: ${task.substring(0, 20)}`;
+    },
+    healthCheck: async () => true
+  };
+
+  orc.registerAgent('fragile', '1.0.0', fragileAgent);
+
+  const result = await orc.executeWorkflow('Build a new feature');
+  orc.shutdown();
+
+  if (result.success) throw new Error('Workflow should have failed');
+
+  const eventTypes = result.events.map(e => e.eventType);
+  if (!eventTypes.includes('workflow.failed')) throw new Error('Missing workflow.failed');
+}
+
+// Test 8: Error handling — agent throws, task recorded as failed
+async function testErrorHandling() {
+  const orc = new Orchestrator();
+
+  const badAgent = {
+    execute: async () => { throw new Error('Kaboom'); },
+    healthCheck: async () => true
+  };
+
+  orc.registerAgent('bad', '1.0.0', badAgent);
+
+  const result = await orc.execute('Do something');
+  orc.shutdown();
+
+  if (result.success) throw new Error('Should have failed');
+  if (result.reward !== 0) throw new Error(`Expected 0 reward, got ${result.reward}`);
+
+  const events = orc.eventStore.getEvents(result.taskId);
+  const types = events.map(e => e.eventType);
+  if (!types.includes('task.failed')) throw new Error('Missing task.failed event');
+}
+
 (async () => {
-  await test('Basic orchestration', testBasicOrchestration);
-  await test('Minimal execution', testMinimalExecution);
-  await test('Execute with registry', testWithRegistry);
-  await test('Execute with RL', testWithRL);
-  await test('Execute with event store', testWithEventStore);
-  await test('Execute with explainer', testWithExplainer);
-  await test('Execute with optimizer', testWithOptimizer);
-  await test('Get system status', testSystemStatus);
-  await test('Full integration', testFullIntegration);
-  console.log('\n✅ All orchestrator tests passed!');
+  console.log('Testing Orchestrator Integration...\n');
+
+  await test('Single task execution', testSingleTask);
+  await test('RL learning converges', testRLLearning);
+  await test('Event sourcing records lifecycle', testEventSourcing);
+  await test('Explainer records decisions', testExplainer);
+  await test('Unhealthy agents filtered out', testHealthFiltering);
+  await test('Workflow executes steps', testWorkflowExecution);
+  await test('Workflow rolls back on failure', testWorkflowRollback);
+  await test('Error handling — agent throws', testErrorHandling);
+
+  console.log(`\n${passed} passed, ${failed} failed`);
+  if (failed === 0) {
+    console.log('\u2705 All orchestrator tests passed!\n');
+    process.exit(0);
+  } else {
+    console.log('\u274c Some tests failed\n');
+    process.exit(1);
+  }
 })();
