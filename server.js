@@ -105,7 +105,7 @@ async function main() {
   }
 
   // Register remote agents from REMOTE_AGENTS env var (requires Redis bus)
-  // Format: REMOTE_AGENTS=fx-ollama,show-runner
+  // Format: REMOTE_AGENTS=fx-ollama,show-runner,road-mac
   if (RemoteAgent && redisBus && process.env.REMOTE_AGENTS) {
     for (const name of process.env.REMOTE_AGENTS.split(',').map(s => s.trim()).filter(Boolean)) {
       const agent = new RemoteAgent({ name, bus: redisBus });

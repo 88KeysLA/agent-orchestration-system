@@ -2,6 +2,36 @@
 
 Hi Kiro,
 
+## Road Mac (MacBook Pro .63) Deployed (2026-03-02)
+
+Fourth machine in the mesh — Matt's MacBook Pro M1 Max 64GB. Renamed from `mbp-ollama` to `road-mac` since it travels.
+
+### What's Set Up
+
+1. **Ollama 0.17.5** installed (`~/bin/ollama` symlink)
+2. **Runner** at `~/agent-runner/` (remote-agent-runner.js + redis-bus.js + ioredis)
+3. **Startup script** `~/agent-runner/start-runner.sh` — smart: checks if on Villa LAN before starting (pings Mech Mac first)
+4. **Crontab** `@reboot sleep 15 && ~/agent-runner/start-runner.sh &`
+5. **Mech Mac crontab** updated: `REMOTE_AGENTS=fx-ollama,show-runner,road-mac`
+6. **server.js** comment updated for new name
+
+### Model Status
+
+`llama3.2:3b` download started but connection dropped at 8% (on the road, slow WiFi). The pull is resumable — run `~/bin/ollama pull llama3.2:3b` when on a faster connection or back at the villa.
+
+### How It Works
+
+When the MacBook Pro is on the villa LAN:
+- `start-runner.sh` pings 192.168.0.60, succeeds, starts Ollama + runner
+- Runner connects to Redis, sends heartbeats
+- Orchestrator sees `road-mac` go healthy, routes tasks to it
+
+When on the road:
+- `start-runner.sh` ping fails, exits cleanly, no error
+- `road-mac` stays "unhealthy" in orchestrator (no heartbeat) — RL routes around it
+
+---
+
 ## Context-Aware RL Routing: Approved (2026-03-02)
 
 Your `7b9817f` commit adding `contextKeyFn` + `contextBiasFn` hooks is **approved as-is**. No bugs found. 209 tests across 23 files, all passing.

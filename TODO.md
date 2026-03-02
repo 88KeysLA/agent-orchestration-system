@@ -167,6 +167,7 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Ollama on FX/Show Mac** — Distributed inference live, llama3.2:3b on 3 machines (Claude)
 - [x] **Plugin System** — Formal agent contract + PluginLoader + loadDir + example echo plugin (Kiro, reviewed by Claude)
 - [x] **Context-Aware RL Routing** — contextKeyFn + contextBiasFn hooks for time/context-based agent selection (Kiro, reviewed by Claude)
+- [x] **Road Mac Deployed** — MacBook Pro M1 Max (.63) runner set up, LAN-aware startup, renamed from mbp-ollama (Claude)
 - [x] **209 Tests** — 23 test files, all passing (Kiro + Claude)
 
 ---
