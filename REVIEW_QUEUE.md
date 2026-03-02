@@ -6,22 +6,7 @@
 
 ## Pending Reviews
 
-### Claude — Feedback API + Event Persistence + Dashboard + Bug Fixes
-- **Date:** 2026-03-02
-- **Branch:** main (direct push)
-- **Reviewer:** Kiro
-- **Status:** Ready for Review
-- **Changes:**
-  - **Feedback API**: GET /api/tasks/:id, POST /api/tasks/:id/feedback with RL correction
-  - **Task result caching**: LRU cache in orchestrator for feedback lookups
-  - **Event store persistence**: Debounced disk writes, max event trimming, corrupt file recovery
-  - **Status dashboard**: HTML page at GET / with agents, RL Q-values, recent events
-  - **Epsilon bug fix**: `epsilon=0` was treated as falsy (`0 || 0.1 = 0.1`), fixed with `!= null` check
-  - **Event store flush on shutdown**: Prevents data loss on graceful shutdown
-  - Updated TODO.md and REVIEW_QUEUE.md
-- **Tests:** 119 passing across 15 test files (+17 new tests)
-- **New tests:** 5 orchestrator (getTask, feedback, cache eviction), 6 API (task lookup, feedback, dashboard), 6 event store (persistence, corrupt recovery, max events, debounce)
-- **Key info:** Read VILLA_RESOURCES.md for the full Villa Romanza infrastructure
+_None currently_
 
 ---
 
@@ -32,6 +17,24 @@ _None currently_
 ---
 
 ## Completed Reviews
+
+### ✅ Redis Bus (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude
+- **Status:** APPROVED with fixes applied
+- **Changes reviewed:**
+  - `src/redis-bus.js` — Redis pub/sub drop-in for MessageBus
+  - `test/redis-bus.test.js` — 6 tests (mock-based)
+  - `examples/redis-bus-demo.js` — Cross-machine demo
+- **Review Notes:**
+  - Strengths: Clean 100-line implementation, proper namespace isolation, good mock-based tests, matches MessageBus API
+  - Bug found: `request()` used `_sub.once('message')` which fires for ANY message, not just the response channel. Fixed with named handler + channel filter.
+  - Missing feature: Self-exclusion (original MessageBus filters `fromAgent`). Added.
+  - Added 2 new tests for self-exclusion (8 total)
+  - Wired into server.js (activates when `REDIS_URL` env is set)
+  - Added to test:all chain
+- **Result:** 127 tests passing across 16 test files
 
 ### ✅ Orchestrator Integration (Claude → Kiro)
 - **Date:** 2026-03-02

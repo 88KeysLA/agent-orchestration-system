@@ -33,7 +33,8 @@ class RedisBus {
       let msg;
       try { msg = JSON.parse(raw); } catch { return; }
 
-      this.subscribers.forEach((topics) => {
+      this.subscribers.forEach((topics, agentId) => {
+        if (agentId === msg.fromAgent) return; // self-exclusion
         const handlers = topics.get(topic) || [];
         handlers.forEach(h => h(msg.payload, msg));
       });
@@ -71,14 +72,17 @@ class RedisBus {
         reject(new Error(`Request timeout on ${topic}`));
       }, timeout);
 
-      // Listen for response
-      this._sub.subscribe(`${this.namespace}:${responseId}`);
-      this._sub.once('message', (channel, raw) => {
-        if (channel !== `${this.namespace}:${responseId}`) return;
+      // Listen for response (filter by channel to avoid cross-talk)
+      const responseChannel = `${this.namespace}:${responseId}`;
+      this._sub.subscribe(responseChannel);
+      const handler = (channel, raw) => {
+        if (channel !== responseChannel) return;
         clearTimeout(timer);
-        this._sub.unsubscribe(`${this.namespace}:${responseId}`);
+        this._sub.removeListener('message', handler);
+        this._sub.unsubscribe(responseChannel);
         try { resolve(JSON.parse(raw).payload); } catch { reject(new Error('Bad response')); }
-      });
+      };
+      this._sub.on('message', handler);
 
       // Send request
       this.publish(topic, { ...payload, responseId }, fromAgent);

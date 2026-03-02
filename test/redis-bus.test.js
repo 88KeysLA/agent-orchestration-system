@@ -127,6 +127,34 @@ async function run() {
     await claude.disconnect();
   });
 
+  await test('Self-exclusion: publisher does not receive own message', async () => {
+    const bus = new RedisBus({ namespace: 'test-self' });
+    await bus.connect();
+    let received = false;
+    bus.subscribe('claude', 'updates', () => { received = true; });
+    await new Promise(r => setTimeout(r, 10));
+    // claude publishes as claude — should NOT receive own message
+    bus.publish('updates', { text: 'self test' }, 'claude');
+    await new Promise(r => setTimeout(r, 30));
+    if (received) throw new Error('Publisher received own message');
+    await bus.disconnect();
+  });
+
+  await test('Self-exclusion: other agent still receives', async () => {
+    const bus = new RedisBus({ namespace: 'test-self2' });
+    await bus.connect();
+    let kiroReceived = false;
+    let claudeReceived = false;
+    bus.subscribe('kiro', 'updates', () => { kiroReceived = true; });
+    bus.subscribe('claude', 'updates', () => { claudeReceived = true; });
+    await new Promise(r => setTimeout(r, 10));
+    bus.publish('updates', { text: 'hello' }, 'claude');
+    await new Promise(r => setTimeout(r, 30));
+    if (!kiroReceived) throw new Error('Other agent did not receive');
+    if (claudeReceived) throw new Error('Sender received own message');
+    await bus.disconnect();
+  });
+
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed > 0) { console.log('❌ Some tests failed'); process.exit(1); }
   else console.log('✅ All Redis bus tests passed!');

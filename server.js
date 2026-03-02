@@ -16,11 +16,12 @@ const Orchestrator = require('./src/orchestrator');
 const MultiObjectiveReward = require('./src/multi-objective-reward');
 const createAPI = require('./src/api');
 
-let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent;
+let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus;
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
 try { OllamaAgent = require('./src/agents/ollama-agent'); } catch {}
 try { RAGAgent = require('./src/agents/rag-agent'); } catch {}
 try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
+try { RedisBus = require('./src/redis-bus'); } catch {}
 
 const VILLA_SYSTEM_PROMPT = `You are an AI agent in the Villa Romanza orchestration system.
 Villa Romanza is a large-scale smart home with 76 areas across 5 floors.
@@ -37,6 +38,20 @@ async function main() {
     persistPath: path.join(dataDir, 'rl-qtable.json'),
     eventStorePath: path.join(dataDir, 'events.json')
   });
+
+  // Connect Redis bus for cross-machine messaging (if REDIS_URL set)
+  let redisBus = null;
+  if (RedisBus && process.env.REDIS_URL) {
+    try {
+      redisBus = new RedisBus({ url: process.env.REDIS_URL });
+      await redisBus.connect();
+      orc.bus = redisBus;
+      console.log(`Redis bus: ${process.env.REDIS_URL}`);
+    } catch (err) {
+      console.log(`Skipped: Redis bus (${err.message})`);
+      redisBus = null;
+    }
+  }
 
   // Register Claude agent if API key available
   if (ClaudeAPIAgent && process.env.ANTHROPIC_API_KEY) {
@@ -132,8 +147,9 @@ async function main() {
     console.log(`  GET  /api/rl-stats    - RL learning state`);
   });
 
-  const shutdown = () => {
+  const shutdown = async () => {
     orc.shutdown();
+    if (redisBus) await redisBus.disconnect().catch(() => {});
     server.close();
     process.exit(0);
   };
