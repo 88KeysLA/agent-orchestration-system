@@ -178,6 +178,23 @@ function createAPI(orchestrator) {
     }
   });
 
+  // GET /api/events/stream — SSE live event feed
+  app.get('/api/events/stream', (req, res) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    const send = (event) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+    orchestrator.eventStore.subscribe('*', send);
+
+    req.on('close', () => {
+      const handlers = orchestrator.eventStore.subscribers.get('*') || [];
+      const idx = handlers.indexOf(send);
+      if (idx !== -1) handlers.splice(idx, 1);
+    });
+  });
+
   // GET /api/rl-stats — RL learning state
   app.get('/api/rl-stats', (req, res) => {
     try {

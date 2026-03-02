@@ -65,7 +65,8 @@ class EventStore {
   // Notify subscribers
   _notify(event) {
     const handlers = this.subscribers.get(event.eventType) || [];
-    handlers.forEach(h => h(event));
+    const wildcards = this.subscribers.get('*') || [];
+    [...handlers, ...wildcards].forEach(h => h(event));
   }
 
   // Get all events (for debugging)

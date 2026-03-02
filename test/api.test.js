@@ -352,6 +352,54 @@ async function testApiKeyGetAllowed() {
   if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
 }
 
+async function testSSEHeaders() {
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/api/events/stream`);
+  // Close the stream immediately
+  await teardown(orc);
+  if (res.headers.get('content-type') !== 'text/event-stream') {
+    throw new Error(`Wrong content-type: ${res.headers.get('content-type')}`);
+  }
+}
+
+async function testSSELiveEvents() {
+  const orc = await setup();
+  const received = [];
+
+  const res = await fetch(`${baseUrl}/api/events/stream`);
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+
+  // Fire a task to generate events
+  fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'test sse' })
+  });
+
+  // Read chunks until we get at least one event or timeout
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('SSE timeout')), 3000));
+  await Promise.race([
+    (async () => {
+      while (received.length === 0) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n').filter(l => l.startsWith('data:'));
+        for (const line of lines) {
+          try { received.push(JSON.parse(line.slice(5).trim())); } catch {}
+        }
+      }
+    })(),
+    timeout
+  ]);
+
+  reader.cancel();
+  await teardown(orc);
+  if (received.length === 0) throw new Error('No SSE events received');
+  if (!received[0].eventType) throw new Error('Event missing eventType');
+}
+
 async function testRateLimit() {
   process.env.RATE_LIMIT = '3';
   process.env.RATE_WINDOW = '5000';
@@ -393,6 +441,8 @@ async function testRateLimit() {
   await test('POST /api/tasks allowed with correct API key', testApiKeyAllowed);
   await test('GET /api/status allowed without API key', testApiKeyGetAllowed);
   await test('rate limiter returns 429 after limit exceeded', testRateLimit);
+  await test('GET /api/events/stream returns SSE headers', testSSEHeaders);
+  await test('GET /api/events/stream receives live events', testSSELiveEvents);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed === 0) {
