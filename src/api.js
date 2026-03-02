@@ -215,6 +215,51 @@ function createAPI(orchestrator) {
     }
   });
 
+  // GET /api/hitl/pending — List tasks awaiting approval
+  app.get('/api/hitl/pending', (req, res) => {
+    try {
+      if (!orchestrator.hitl) return res.json({ pending: [] });
+      res.json({ pending: orchestrator.hitl.pending });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/hitl/:id/approve — Approve a pending task
+  app.post('/api/hitl/:id/approve', (req, res) => {
+    try {
+      if (!orchestrator.hitl) return res.status(404).json({ error: 'HITL not configured' });
+      const ok = orchestrator.hitl.approve(req.params.id, req.body.notes || '');
+      if (!ok) return res.status(404).json({ error: 'Task not pending' });
+      res.json({ approved: true, taskId: req.params.id });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/hitl/:id/reject — Reject a pending task
+  app.post('/api/hitl/:id/reject', (req, res) => {
+    try {
+      if (!orchestrator.hitl) return res.status(404).json({ error: 'HITL not configured' });
+      const ok = orchestrator.hitl.reject(req.params.id, req.body.reason || 'rejected');
+      if (!ok) return res.status(404).json({ error: 'Task not pending' });
+      res.json({ rejected: true, taskId: req.params.id });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/context — Current context snapshot
+  app.get('/api/context', async (req, res) => {
+    try {
+      if (!orchestrator.context) return res.json({ context: null });
+      const snapshot = await orchestrator.context.getContext();
+      res.json({ context: snapshot, providers: orchestrator.context.providers });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   return app;
 }
 

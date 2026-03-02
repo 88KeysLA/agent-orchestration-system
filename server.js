@@ -24,6 +24,12 @@ try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
 try { RedisBus = require('./src/redis-bus'); } catch {}
 try { RemoteAgent = require('./src/agents/remote-agent'); } catch {}
 
+const HITL = require('./src/hitl');
+const { ContextManager, StaticProvider, TimeProvider } = require('./src/context-providers');
+const { PluginLoader } = require('./src/plugin-loader');
+let TenantManager;
+try { TenantManager = require('./src/tenancy'); } catch {}
+
 const VILLA_SYSTEM_PROMPT = `You are an AI agent in the Villa Romanza orchestration system.
 Villa Romanza is a large-scale smart home with 76 areas across 5 floors.
 You assist with home automation, AV control, lighting, climate, and general tasks.
@@ -34,10 +40,45 @@ async function main() {
 
   const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
   const scorer = new MultiObjectiveReward();
+
+  // HITL approval gates — destructive tasks require human approval
+  const hitl = new HITL({ timeout: 60000, defaultAction: 'reject' });
+  hitl.addGate(/\b(delete|destroy|drop|truncate|shutdown|reboot)\b/i, async (taskId, task) => {
+    console.log(`[HITL] Approval needed for task ${taskId}: ${task.substring(0, 80)}`);
+  });
+  console.log('HITL: destructive task gates active');
+
+  // Context providers — time awareness + static environment
+  const context = new ContextManager();
+  context.add('time', new TimeProvider());
+  context.add('env', new StaticProvider({
+    region: 'villa-romanza',
+    tier: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+    host: require('os').hostname()
+  }));
+  console.log('Context: time + env providers active');
+
+  // Tenancy — opt-in via TENANTS env var (e.g., TENANTS=villa:100:5,dev:50:3)
+  let tenancy = null;
+  if (TenantManager && process.env.TENANTS) {
+    tenancy = new TenantManager();
+    for (const spec of process.env.TENANTS.split(',').map(s => s.trim()).filter(Boolean)) {
+      const [id, tasksPerHour, concurrent] = spec.split(':');
+      tenancy.create(id, {
+        tasksPerHour: parseInt(tasksPerHour) || Infinity,
+        concurrent: parseInt(concurrent) || Infinity
+      });
+      console.log(`Tenant: ${id} (${tasksPerHour || '∞'} tasks/hr, ${concurrent || '∞'} concurrent)`);
+    }
+  }
+
   const orc = new Orchestrator({
     rewardFn: (result, metadata) => scorer.score(result, metadata),
     persistPath: path.join(dataDir, 'rl-qtable.json'),
-    eventStorePath: path.join(dataDir, 'events.json')
+    eventStorePath: path.join(dataDir, 'events.json'),
+    hitl,
+    context,
+    tenancy
   });
 
   // Connect Redis bus for cross-machine messaging (if REDIS_URL set)
@@ -134,6 +175,17 @@ async function main() {
       strengths: ['villa knowledge', 'synthesized answers', 'device info', 'documentation']
     });
     console.log('Registered: rag-ollama (RAG retrieval + Ollama synthesis)');
+  }
+
+  // Load plugins from plugins/ directory
+  const pluginsDir = path.join(__dirname, 'plugins');
+  const fs = require('fs');
+  if (fs.existsSync(pluginsDir)) {
+    const results = PluginLoader.loadDir(orc, pluginsDir);
+    const loaded = results.filter(r => typeof r === 'string');
+    const errors = results.filter(r => typeof r === 'object');
+    if (loaded.length) console.log(`Plugins: ${loaded.join(', ')}`);
+    if (errors.length) console.log(`Plugin errors: ${errors.map(e => `${e.file}(${e.error})`).join(', ')}`);
   }
 
   // Fallback mock agent so system is never empty
