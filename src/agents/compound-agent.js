@@ -36,7 +36,9 @@ class CompoundAgent {
       } else if (isFirst) {
         prompt = task;
       } else {
-        prompt = `Based on the following context, answer the question.\n\nContext:\n${context}\n\nQuestion: ${task}`;
+        // Pass previous stage output directly — supports both structured
+        // commands (ha:state:...) and natural language context
+        prompt = context;
       }
 
       let result = await stage.agent.execute(prompt);
@@ -44,11 +46,14 @@ class CompoundAgent {
       // Between stages: extract structured command if present (e.g. ha:state:...)
       if (!isLast && typeof result === 'string') {
         const cmdMatch = result.match(/^(ha:\S+.*)$/m) || result.match(/`(ha:\S+.*?)`/);
-        if (cmdMatch) result = cmdMatch[1].trim();
-        else result = result.trim();
+        if (cmdMatch) {
+          context = cmdMatch[1].trim();
+        } else {
+          context = context + this.separator + result.trim();
+        }
+      } else {
+        context = result;
       }
-
-      context = isLast ? result : context + this.separator + result;
 
       if (stage.agent.lastUsage) {
         usages.push({ stage: stage.name, ...stage.agent.lastUsage });
