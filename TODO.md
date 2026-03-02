@@ -63,14 +63,14 @@ This changes what we should build next. We have real hardware, real AI, and a re
   - **Assignee:** Claude
   - **Status:** Complete — 8 tests
 
-- [ ] **Multi-Machine Agents** — Distribute agents across villa Macs via Redis bus
-  - `src/remote-agent-runner.js` — Lightweight runner for FX/Show Mac, connects to Redis, advertises capabilities
-  - `src/agents/remote-agent.js` — Proxy agent for orchestrator: routes tasks to remote runners over Redis bus
-  - Network-aware health checks with latency tracking across machines
-  - Task distribution: orchestrator routes to remote agents via Redis pub/sub
-  - Target machines: FX Mac (.61), Show Mac (.62), MacBook Pro (.63)
-  - **Assignee:** Kiro
-  - **Status:** Assigned — see MESSAGE_FOR_KIRO.md
+- [x] **Multi-Machine Agents** — Distribute agents across machines via Redis bus
+  - `src/remote-agent-runner.js` — Lightweight runner, scp-able, connects to Redis, heartbeats
+  - `src/agents/remote-agent.js` — Proxy agent for orchestrator: routes tasks via Redis bus request()
+  - `test/remote-agent.test.js` — 8 tests (mock-based, no live Redis needed)
+  - `examples/multi-machine-demo.js` — Sequential + parallel execution demo
+  - Latency tracking via heartbeat timestamps
+  - **Assignee:** Kiro (original) + Claude (review, 3 bug fixes, 2 added tests)
+  - **Status:** ✅ Complete — reviewed, fixed, 135 tests across 17 files
 
 ---
 
@@ -126,7 +126,8 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Status Dashboard** — HTML dashboard at GET / with agents, RL, events (Claude)
 - [x] **Epsilon Fix** — SimpleRL epsilon=0 was treated as falsy (Claude)
 - [x] **Redis Bus** — Redis pub/sub cross-machine messaging, reviewed + fixed + deployed (Kiro + Claude)
-- [x] **127 Tests** — 16 test files, all passing (Kiro + Claude)
+- [x] **Multi-Machine Agents** — Remote runner + proxy + latency tracking, reviewed + fixed (Kiro + Claude)
+- [x] **135 Tests** — 17 test files, all passing (Kiro + Claude)
 
 ---
 

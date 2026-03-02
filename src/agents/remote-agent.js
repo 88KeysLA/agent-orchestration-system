@@ -16,6 +16,7 @@ class RemoteAgent {
     this.bus = options.bus; // shared RedisBus instance
     this.timeout = options.timeout || 30000;
     this._lastHeartbeat = null;
+    this._latency = null;
     this._capabilities = {};
     this._listening = false;
   }
@@ -26,7 +27,8 @@ class RemoteAgent {
     this._listening = true;
     this.bus.subscribe(`proxy:${this.name}`, HEARTBEAT_TOPIC, (payload) => {
       if (payload.name === this.name) {
-        this._lastHeartbeat = payload.ts;
+        this._lastHeartbeat = Date.now(); // local receipt time, not remote ts
+        this._latency = payload.ts ? Date.now() - payload.ts : null;
         this._capabilities = payload.capabilities || {};
       }
     });
@@ -50,6 +52,10 @@ class RemoteAgent {
 
   get capabilities() {
     return this._capabilities;
+  }
+
+  get latency() {
+    return this._latency;
   }
 }
 

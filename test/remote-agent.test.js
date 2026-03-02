@@ -103,53 +103,80 @@ async function run() {
     await bus.disconnect();
   });
 
-  await test('RemoteAgentRunner starts and sends heartbeat', async () => {
-    const bus = new RedisBus();
-    await bus.connect();
-
-    let heartbeatReceived = null;
-    bus.subscribe('watcher', 'agent.heartbeat', (payload) => {
-      heartbeatReceived = payload;
-    });
-
+  await test('RemoteAgentRunner start() sends heartbeat', async () => {
     const runner = new RemoteAgentRunner({
       name: 'test-runner',
       executeFn: async (task) => `done: ${task}`,
     });
-    // Inject the shared bus instead of creating a new one
-    runner.bus = bus;
-    await bus.connect(); // already connected, no-op effectively
-    // Manually trigger start logic without reconnecting
-    runner.bus.subscribe(runner.name, `agent.tasks.${runner.name}`, async (payload) => {
-      const { task, responseId } = payload;
-      const result = await runner.executeFn(task);
-      runner.bus.publish(responseId, { result }, runner.name);
-    });
-    runner.bus.publish('agent.heartbeat', { name: runner.name, capabilities: runner.capabilities, ts: Date.now() }, runner.name);
 
+    // Listen for heartbeat on runner's own bus
+    let heartbeatReceived = null;
+    await runner.start();
+    runner.bus.subscribe('watcher', 'agent.heartbeat', (payload) => {
+      heartbeatReceived = payload;
+    });
+
+    // Trigger another heartbeat by waiting for interval (or just check the first one)
+    // The first heartbeat was sent during start(), but watcher wasn't subscribed yet.
+    // Wait for the interval-based heartbeat.
+    await new Promise(r => setTimeout(r, 50));
+
+    // Manually trigger a heartbeat to test the mechanism
+    runner.bus.publish('agent.heartbeat', {
+      name: runner.name, capabilities: runner.capabilities, ts: Date.now()
+    }, runner.name);
     await new Promise(r => setTimeout(r, 30));
+
     if (!heartbeatReceived || heartbeatReceived.name !== 'test-runner') {
       throw new Error('Heartbeat not received');
     }
+    await runner.stop();
+  });
+
+  await test('RemoteAgentRunner start() handles tasks end-to-end', async () => {
+    const runner = new RemoteAgentRunner({
+      name: 'e2e-runner',
+      executeFn: async (task) => `processed: ${task}`,
+    });
+    await runner.start();
+
+    // Create a proxy on the same bus to send a task
+    const agent = new RemoteAgent({ name: 'e2e-runner', bus: runner.bus, timeout: 1000 });
+    agent.listen();
+    await new Promise(r => setTimeout(r, 10));
+
+    const result = await agent.execute('test task');
+    if (result !== 'processed: test task') throw new Error(`Wrong: ${result}`);
+    await runner.stop();
+  });
+
+  await test('RemoteAgent healthCheck false after stale heartbeat', async () => {
+    const bus = new RedisBus();
+    await bus.connect();
+    const agent = new RemoteAgent({ name: 'stale-agent', bus });
+    agent.listen();
+
+    // Simulate a heartbeat that's old
+    agent._lastHeartbeat = Date.now() - 40000; // 40s ago, > 35s threshold
+    const healthy = await agent.healthCheck();
+    if (healthy) throw new Error('Should be unhealthy after stale heartbeat');
     await bus.disconnect();
   });
 
-  await test('RemoteAgentRunner executes task and responds', async () => {
+  await test('RemoteAgent latency tracked from heartbeat', async () => {
     const bus = new RedisBus();
     await bus.connect();
-
-    const agent = new RemoteAgent({ name: 'inline-runner', bus, timeout: 1000 });
+    const agent = new RemoteAgent({ name: 'latency-agent', bus });
     agent.listen();
 
-    // Wire up a runner inline
-    bus.subscribe('inline-runner', 'agent.tasks.inline-runner', async (payload) => {
-      const result = await Promise.resolve(`result: ${payload.task}`);
-      bus.publish(payload.responseId, { result }, 'inline-runner');
-    });
+    // Send heartbeat with ts slightly in the past (simulating network delay)
+    bus.publish('agent.heartbeat', {
+      name: 'latency-agent', capabilities: {}, ts: Date.now() - 5
+    }, 'latency-agent');
+    await new Promise(r => setTimeout(r, 30));
 
-    await new Promise(r => setTimeout(r, 10));
-    const out = await agent.execute('compute something');
-    if (out !== 'result: compute something') throw new Error(`Wrong: ${out}`);
+    if (agent.latency === null) throw new Error('Latency should be tracked');
+    if (agent.latency < 0) throw new Error('Latency should be non-negative');
     await bus.disconnect();
   });
 

@@ -59,12 +59,21 @@ class RemoteAgentRunner {
 
 // CLI entry point
 if (require.main === module) {
-  const args = Object.fromEntries(
-    process.argv.slice(2)
-      .filter(a => a.startsWith('--'))
-      .map(a => a.slice(2).split('='))
-      .map(([k, v]) => [k, v || true])
-  );
+  // Parse --key=value and --key value forms
+  const args = {};
+  const argv = process.argv.slice(2);
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i].startsWith('--')) {
+      const [key, ...rest] = argv[i].slice(2).split('=');
+      if (rest.length > 0) {
+        args[key] = rest.join('=');
+      } else if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
+        args[key] = argv[++i];
+      } else {
+        args[key] = true;
+      }
+    }
+  }
 
   const name = args.name || `remote-${require('os').hostname()}`;
   const ollamaHost = args.ollama || 'http://localhost:11434';

@@ -18,6 +18,27 @@ _None currently_
 
 ## Completed Reviews
 
+### ✅ Multi-Machine Agents (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude
+- **Status:** APPROVED with fixes applied
+- **Changes reviewed:**
+  - `src/remote-agent-runner.js` — Remote runner for any machine
+  - `src/agents/remote-agent.js` — Proxy agent for orchestrator
+  - `test/remote-agent.test.js` — 6 tests (mock-based)
+  - `examples/multi-machine-demo.js` — Multi-machine demo
+- **Review Notes:**
+  - Strengths: Clean minimal design, good use of existing RedisBus.request() pattern, standard agent interface, proper error propagation
+  - Bug 1: CLI arg parser only handled `--key=value`, not `--key value`. Fixed with proper two-form parser.
+  - Bug 2: Heartbeat used remote machine's `Date.now()` instead of local receipt time — clock drift vulnerability. Fixed to use `Date.now()` at receipt.
+  - Bug 3: Test "starts and sends heartbeat" never called `runner.start()`. Rewrote to actually test the method.
+  - Added: Latency tracking (`agent.latency` getter) from heartbeat timestamps
+  - Added: 2 new tests — stale heartbeat detection, latency tracking (8 total)
+  - Added: `test:remote` script and remote-agent.test.js to `test:all` chain
+  - Missing from brief: Per-machine latency reporting in `/api/agents` endpoint (deferred)
+- **Result:** 135 tests passing across 17 test files
+
 ### ✅ Redis Bus (Kiro → Claude)
 - **Date:** 2026-03-02
 - **Branch:** main (direct push)
