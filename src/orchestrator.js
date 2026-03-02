@@ -81,7 +81,7 @@ class Orchestrator {
     const candidates = healthyAgents.length > 0 ? healthyAgents : agentNames;
 
     // 3. Select agent (strength-aware RL)
-    const selectedAgent = this._selectAgent(contextKey, candidates, analysis);
+    const selectedAgent = this._selectAgent(contextKey, candidates, analysis, taskDescription);
 
     // 4. Record decision with explainer
     const alternatives = candidates.map(name => ({
@@ -232,7 +232,7 @@ class Orchestrator {
     };
   }
 
-  _selectAgent(contextKey, candidates, analysis) {
+  _selectAgent(contextKey, candidates, analysis, taskDescription) {
     // If RL has learned data for this context, defer to RL
     const hasData = candidates.some(c => this.rl.getQ(contextKey, c) > 0);
     if (hasData) {
@@ -247,7 +247,8 @@ class Orchestrator {
 
     let best = candidates[0];
     let bestScore = 0;
-    const taskWords = `${analysis.taskType} ${analysis.domain} ${analysis.urgency}`.toLowerCase();
+    // Match against both analysis categories AND the actual task description
+    const taskWords = `${analysis.taskType} ${analysis.domain} ${analysis.urgency} ${taskDescription || ''}`.toLowerCase();
 
     for (const name of candidates) {
       const meta = this._agentMeta.get(name) || {};
@@ -256,7 +257,7 @@ class Orchestrator {
       for (const s of strengths) {
         const words = s.toLowerCase().split(/\s+/);
         for (const w of words) {
-          if (taskWords.includes(w)) score++;
+          if (w.length >= 3 && taskWords.includes(w)) score++;
         }
       }
       if (score > bestScore) {
