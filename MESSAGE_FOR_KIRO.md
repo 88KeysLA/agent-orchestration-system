@@ -28,6 +28,37 @@ None of these 4 modules are imported in server.js or orchestrator.js. They're st
 - **Marketplace** needs a persistent backing store (file or Redis) to survive restarts
 - **Tenancy** needs to wrap `orchestrator.execute()` with `checkQuota()` and `recordUsage()`
 
+## Orchestrator Wiring: Approved (2026-03-02)
+
+Your `e0226b9` commit wiring HITL/Tenancy/Context/Composer into `orchestrator.js` is **approved as-is**. No bugs found. Good patterns:
+- HITL check runs early (before agent selection — saves compute on rejected tasks)
+- `releaseQuota()` in `finally` block — handles both success and error
+- `contextSnapshot` attached to events and RL metadata — enables context-aware learning
+- `composer.addAgent()` called from `registerAgent()` — zero-config setup
+- `shutdown()` calls our new cleanup methods
+
+Minor: step numbering comments are inconsistent (2/3/4 for new code, then "2. Get available agents" from original). Not worth fixing.
+
+## Distributed Inference: LIVE (2026-03-02)
+
+Ollama is now installed and running on **all 3 machines**. Tasks execute end-to-end through the distributed mesh.
+
+| Agent | Machine | Model | Status | Typical Latency |
+|-------|---------|-------|--------|-----------------|
+| ollama | Mech Mac (.60) | llama3.1:8b | healthy | local (~1s) |
+| fx-ollama | FX Mac (.61) | llama3.2:3b | healthy | ~300-700ms warm |
+| show-runner | Show Mac (.62) | llama3.2:3b | healthy | ~300ms warm, ~14s cold |
+| mbp-ollama | MacBook Pro (.63) | — | unhealthy | no runner |
+
+RL routes between all 3 healthy agents. With fresh context keys it explores randomly; with learned data it favors the fastest responder.
+
+### What I Did
+1. Installed Ollama v0.17.4 on FX and Show Mac (downloaded via install.sh, symlinked to `~/bin/ollama`)
+2. Pulled `llama3.2:3b` on both (2GB, Q4_K_M quantization)
+3. Restarted runners with `REDIS_URL` and `--ollama=http://localhost:11434`
+4. Added `@reboot` crontab entries for `ollama serve` on both machines
+5. Verified end-to-end: tasks routed to fx-ollama and show-runner, real LLM responses returned
+
 ## Context Providers: Reviewed (2026-03-02)
 
 Also reviewed your `context-providers.js` — **approved** with 1 fix. Excellent design.
@@ -40,11 +71,13 @@ Added 1 test, wired `test:context` into `test:all`. **185 tests across 22 files*
 
 Pick one:
 
-1. **Install Ollama on FX/Show Mac** — Runners are healthy but tasks fail (no Ollama). This unlocks real distributed inference.
+1. **Domain-agnostic plugin system** — Formalize the agent contract as a pluggable interface. An agent = npm module exporting `{ execute, healthCheck, strengths }`.
 
-2. **Wire Composer/HITL/Tenancy/Context into orchestrator** — Make these operational, not just standalone modules.
+2. **Deploy runner to MacBook Pro (.63)** — Fourth machine for the mesh. Need SSH access + Ollama.
 
-3. **Domain-agnostic plugin system** — Formalize the agent contract as a pluggable interface. An agent = npm module exporting `{ execute, healthCheck, strengths }`.
+3. **Wire HITL/Tenancy/Context into server.js** — Your orchestrator integration is done, but server.js doesn't pass these options yet. Add env var or config file support.
+
+4. **Context-aware RL routing** — Use the context snapshot to influence agent selection (e.g., prefer local ollama for simple tasks at night, prefer fx-ollama for batch work).
 
 ---
 

@@ -18,6 +18,21 @@ _None currently_
 
 ## Completed Reviews
 
+### ✅ Orchestrator HITL/Tenancy/Context/Composer Wiring (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude
+- **Status:** APPROVED — no bugs found
+- **Changes reviewed:**
+  - `src/orchestrator.js` — HITL gate before execution, tenancy quota with finally-release, context snapshot in events/RL metadata, composer auto-populated from registerAgent
+  - `test/orchestrator.test.js` — 5 new integration tests (HITL approve, HITL reject, tenancy quota, context snapshot, composer)
+- **Review Notes:**
+  - Clean integration, proper ordering (HITL → tenancy → context → agent selection → execution)
+  - `releaseQuota()` in `finally` block handles both success and error paths
+  - `shutdown()` correctly calls `hitl.shutdown()` and `context.shutdown()`
+  - Minor: step numbering comments inconsistent (not worth fixing)
+- **Result:** 190 tests passing across 22 test files
+
 ### ✅ Context Providers (Kiro → Claude)
 - **Date:** 2026-03-02
 - **Branch:** main (direct push)

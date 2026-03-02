@@ -162,7 +162,9 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Epsilon Fix** — SimpleRL epsilon=0 was treated as falsy (Claude)
 - [x] **Redis Bus** — Redis pub/sub cross-machine messaging, reviewed + fixed + deployed (Kiro + Claude)
 - [x] **Multi-Machine Agents** — Remote runner + proxy + latency tracking, reviewed + fixed (Kiro + Claude)
-- [x] **185 Tests** — 22 test files, all passing (Kiro + Claude)
+- [x] **Orchestrator Wiring** — HITL, Tenancy, Context, Composer integrated into execute() (Kiro, reviewed by Claude)
+- [x] **Ollama on FX/Show Mac** — Distributed inference live, llama3.2:3b on 3 machines (Claude)
+- [x] **190 Tests** — 22 test files, all passing (Kiro + Claude)
 
 ---
 
