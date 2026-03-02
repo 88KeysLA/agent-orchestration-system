@@ -91,6 +91,29 @@ async function run() {
     if (!threw) throw new Error('Should throw on 503');
   });
 
+  await test('sends x-api-key header when apiKey set', async () => {
+    let capturedHeaders;
+    global.fetch = async (url, opts) => {
+      capturedHeaders = opts.headers;
+      return { ok: true, status: 200, json: async () => ({ result: 'ok' }) };
+    };
+    const villa = new VillaClient('http://192.168.0.60:8406', { apiKey: 'secret123' });
+    await villa.execute('task');
+    if (capturedHeaders['x-api-key'] !== 'secret123') throw new Error('Missing x-api-key header');
+    // restore mock
+    global.fetch = async (url, opts) => ({
+      ok: mockResponse.ok !== false, status: mockResponse.status || 200,
+      statusText: mockResponse.statusText || 'OK', json: async () => mockResponse.body
+    });
+  });
+
+  await test('reads VILLA_API_KEY from env', async () => {
+    process.env.VILLA_API_KEY = 'env-secret';
+    const villa = new VillaClient();
+    if (villa.apiKey !== 'env-secret') throw new Error('apiKey not read from env');
+    delete process.env.VILLA_API_KEY;
+  });
+
   console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }
