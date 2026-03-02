@@ -5,6 +5,19 @@
 
 ---
 
+## 🔴 IN PROGRESS: Real-Time AI-to-AI Message Bus (Kiro — Started 2026-03-02)
+
+- [ ] **Redis Message Bus** — Code complete, needs Redis deployed
+  - `src/redis-bus.js` — drop-in replacement for MessageBus, works across machines
+  - `test/redis-bus.test.js` — 6/6 tests passing (mock-based, no live Redis needed)
+  - `examples/redis-bus-demo.js` — shows Kiro ↔ Claude coordination
+  - **Needs:** `redis-server` installed on Mech Mac (192.168.0.60)
+  - **Then:** `REDIS_URL=redis://192.168.0.60:6379` in server.js env
+  - **Assignee:** Kiro (code done) → needs Redis install on Mech Mac
+  - **Status:** Code complete, pending Redis deployment
+
+---
+
 ## NEW: Villa Romanza Infrastructure Available
 
 **Read VILLA_RESOURCES.md for full details.**
