@@ -88,6 +88,28 @@ async function testExecuteAlternateFormat() {
   if (!result.includes('docs.md')) throw new Error('Missing source from metadata');
 }
 
+async function testVillaRAGFormat() {
+  mockFetch({
+    answer: 'The VRROOM is an HDFury device at 192.168.1.70.',
+    model_used: 'llama3.1:8b',
+    sources: [
+      { file: 'vrroom.md', section: 'Overview', score: 0.89 },
+      { file: 'network.md', section: 'AV Devices', score: 0.75 }
+    ],
+    query_time_ms: 3200
+  });
+
+  const agent = new RAGAgent({ host: 'http://localhost:8450' });
+  const result = await agent.execute('What is the VRROOM?');
+
+  if (!result.includes('HDFury device')) throw new Error('Missing answer');
+  if (!result.includes('Sources:')) throw new Error('Missing sources section');
+  if (!result.includes('vrroom.md')) throw new Error('Missing source file');
+  if (!result.includes('0.890')) throw new Error('Missing score');
+  if (agent.lastUsage.model !== 'llama3.1:8b') throw new Error('Missing model in usage');
+  if (agent.lastUsage.queryDuration !== 3200) throw new Error('Wrong query duration');
+}
+
 async function testExecuteError() {
   mockFetch({}, 500);
   const agent = new RAGAgent({ host: 'http://localhost:8450' });
@@ -128,7 +150,7 @@ async function testSendsTopK() {
   await agent.execute('test query');
 
   if (capturedBody.top_k !== 3) throw new Error(`Wrong top_k: ${capturedBody.top_k}`);
-  if (capturedBody.query !== 'test query') throw new Error(`Wrong query: ${capturedBody.query}`);
+  if (capturedBody.question !== 'test query') throw new Error(`Wrong question: ${capturedBody.question}`);
 }
 
 (async () => {
@@ -139,6 +161,7 @@ async function testSendsTopK() {
   await test('RAG: execute with results', testExecuteWithResults);
   await test('RAG: execute empty results', testExecuteEmptyResults);
   await test('RAG: execute alternate format', testExecuteAlternateFormat);
+  await test('RAG: Villa RAG response format', testVillaRAGFormat);
   await test('RAG: execute error handling', testExecuteError);
   await test('RAG: healthCheck on 200', testHealthOk);
   await test('RAG: healthCheck on network error', testHealthFail);

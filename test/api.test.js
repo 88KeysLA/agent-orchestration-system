@@ -197,6 +197,25 @@ async function testEventsDefaultLimit() {
   if (data.events.length > 50) throw new Error('Default limit exceeded');
 }
 
+async function testGetRLStats() {
+  const orc = await setup();
+  // Generate some RL data
+  await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'Do something' })
+  });
+  const res = await fetch(`${baseUrl}/api/rl-stats`);
+  const data = await res.json();
+  await teardown(orc);
+
+  if (res.status !== 200) throw new Error(`Status ${res.status}`);
+  if (typeof data.entries !== 'number') throw new Error('Missing entries count');
+  if (typeof data.totalUpdates !== 'number') throw new Error('Missing totalUpdates');
+  if (!data.byContext) throw new Error('Missing byContext');
+  if (!Array.isArray(data.raw)) throw new Error('Missing raw array');
+}
+
 (async () => {
   console.log('Testing REST API...\n');
 
@@ -210,6 +229,7 @@ async function testEventsDefaultLimit() {
   await test('GET /api/events with limit', testGetEvents);
   await test('GET /api/events default limit', testEventsDefaultLimit);
   await test('GET /api/decisions returns history', testGetDecisions);
+  await test('GET /api/rl-stats returns learning state', testGetRLStats);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed === 0) {

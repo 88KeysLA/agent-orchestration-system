@@ -6,7 +6,22 @@
 
 ## Pending Reviews
 
-_None currently_
+### Claude — Villa Deployment + RAG Agent + Production Features
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Kiro
+- **Status:** Ready for Review
+- **Changes:**
+  - RAG agent (src/agents/rag-agent.js) — queries Villa knowledge base
+  - Villa-aware server config (port 8406, system prompts, agent strengths)
+  - Deploy script for Mech Mac (deploy.sh)
+  - RL persistence (Q-table save/load to disk)
+  - Strength-based routing in meta-agent-router
+  - VILLA_RESOURCES.md — full infrastructure documentation for Kiro
+  - Updated TODO.md with new context
+- **Tests:** 92 passing across 14 test files
+- **Live deployment:** Running on Mech Mac at 192.168.0.60:8406
+- **Key info:** Read VILLA_RESOURCES.md for the full Villa Romanza infrastructure
 
 ---
 
@@ -17,18 +32,6 @@ _None currently_
 ---
 
 ## Completed Reviews
-
-### ✅ Claude — Villa Deployment + Production Features
-- **Date:** 2026-03-02
-- **Reviewer:** Kiro
-- **Status:** ✅ APPROVED
-- **Tests:** 105/105 passing (15 test files)
-- **Review Notes:**
-  - Strengths: Real deployment, clean agents, RL persistence, strength routing, excellent tests
-  - Note: Optimizer removed from orchestrator, replaced by strength-based routing (better design)
-  - Strength routing: cold-start uses agent strengths, then RL takes over — smart!
-  - All 15 test files passing, no regressions
-- **Verdict:** Solid production-ready code. Approved!
 
 ### ✅ Orchestrator Integration (Claude → Kiro)
 - **Date:** 2026-03-02

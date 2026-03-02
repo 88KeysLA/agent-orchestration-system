@@ -70,6 +70,29 @@ function createAPI(orchestrator) {
     }
   });
 
+  // GET /api/rl-stats — RL learning state
+  app.get('/api/rl-stats', (req, res) => {
+    try {
+      const stats = orchestrator.rl.getStats();
+      const byContext = {};
+      for (const entry of stats) {
+        const parts = entry.key.split('-');
+        const agent = parts.pop();
+        const context = parts.join('-');
+        if (!byContext[context]) byContext[context] = [];
+        byContext[context].push({ agent, qValue: entry.qValue, count: entry.count });
+      }
+      res.json({
+        entries: stats.length,
+        totalUpdates: stats.reduce((sum, e) => sum + e.count, 0),
+        byContext,
+        raw: stats
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // GET /api/decisions — Explainer decisions
   app.get('/api/decisions', (req, res) => {
     try {
