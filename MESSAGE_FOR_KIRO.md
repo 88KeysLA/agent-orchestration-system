@@ -2,41 +2,48 @@
 
 Hi Kiro,
 
-Great work on the Redis Bus — reviewed, fixed, deployed, and live. See REVIEW_QUEUE.md for full review notes.
+## Update: Phase 2.1 Mood System Deployed (2026-03-02)
 
-## What Changed in Your Code
+While you've been working on Multi-Machine Agents, I deployed the time-aware context engine for the villa's mood system. Mentioning it because it demonstrates a pattern relevant to your work:
 
-Two bugs fixed during review:
+- **Sun elevation drives automatic modifier scaling** — brightness, volume, HSB intensity, climate all adjust continuously based on real-world sensor data (not clock time)
+- **Smooth interpolation** between 8 time periods prevents jarring transitions
+- **Intent resistance** lets certain agent tasks bypass modification (e.g., SLEEP intent is never dimmed further)
+
+This is the kind of **context-aware task modification** that the orchestrator should eventually support generically — not just for home automation, but for any domain where environmental context should influence how agent tasks execute.
+
+---
+
+## Redis Bus: Reviewed, Fixed, Deployed ✅
+
+Great work on the Redis Bus. Two bugs fixed during review:
 
 1. **`request()` channel filter** — `_sub.once('message')` fired for ANY Redis message, not just the response channel. Replaced with a named handler that checks `channel === responseChannel` before resolving.
 
-2. **Self-exclusion** — Original MessageBus filters `fromAgent` so publishers don't receive their own messages. Added `if (agentId === msg.fromAgent) return;` in the `connect()` message handler.
+2. **Self-exclusion** — Added `if (agentId === msg.fromAgent) return;` in the `connect()` message handler.
 
 Added 2 tests for self-exclusion (8 total now). All 127 tests pass across 16 files.
 
-## Current State
+---
 
-- Redis 8.6.1 running on Mech Mac (:6379), built from source, crontab persistent
-- Orchestrator connects via `REDIS_URL=redis://localhost:6379` at boot
-- Live pub/sub, self-exclusion, and request-response all verified over real Redis
-- 3 agents registered: ollama, rag, rag-ollama
+## Your Current Task: Multi-Machine Agents
 
-## Your Next Task: Multi-Machine Agents
+The Redis bus is live — now let's use it to distribute agents across machines. **Important framing**: while we're testing this on the villa's Macs, build it to be general-purpose. The orchestrator should be a framework that works for any distributed agent deployment, not just home automation.
 
-The Redis bus is live — now let's use it to distribute agents across the villa's Macs. This is the natural next step.
+### Design Principles (keep it general)
 
-### Goal
-
-Turn the orchestrator from "all on one Mac" into a distributed agent mesh. Any Mac on the villa network can host agents and communicate through the Redis bus.
+- **Machine-agnostic**: A runner should work on any Node.js host, not just villa Macs. Machine-specific details (IP, available models) should be config, not code.
+- **Agent-type-agnostic**: The runner shouldn't know about Ollama specifically. It should accept any agent that implements `execute()`. We register agents on each machine, and the runner advertises whatever agents it has.
+- **Transport-agnostic foundation**: While Redis is our transport today, the runner/proxy interfaces should be clean enough that swapping transports (WebSocket, gRPC, NATS) wouldn't require rewriting agent logic.
 
 ### What to Build
 
 #### 1. Remote Agent Runner (`src/remote-agent-runner.js`)
-Lightweight Node process that runs on FX/Show/MacBook Pro Macs:
-- Connects to Redis bus at `redis://192.168.0.60:6379`
+Lightweight Node process that runs on any machine:
+- Connects to Redis bus at configurable `REDIS_URL`
 - Subscribes to `agent.tasks` topic
-- Advertises its capabilities (machine name, available models, resources)
-- Executes tasks locally and publishes results back
+- Advertises its capabilities (machine name, available agents, resources)
+- Executes tasks locally via registered agents and publishes results back
 - Sends heartbeats so the orchestrator knows it's alive
 
 #### 2. Remote Agent Proxy (`src/agents/remote-agent.js`)
@@ -52,7 +59,7 @@ Agent that the orchestrator registers locally, but routes tasks over Redis:
 - Auto-deregister agents that miss N heartbeats
 - Report latency in `/api/agents` and dashboard
 
-### Target Machines
+### Test Machines (for validation)
 
 | Mac | IP | Role | Available |
 |-----|------|------|-----------|
@@ -65,13 +72,12 @@ Agent that the orchestrator registers locally, but routes tasks over Redis:
 ### Architecture
 
 ```
-FX Mac (.61)                    Mech Mac (.60)                   Show Mac (.62)
+Any Machine A                   Orchestrator Host                Any Machine B
 ┌─────────────────┐            ┌──────────────────┐            ┌─────────────────┐
 │ remote-runner.js │◄──Redis──►│  orchestrator     │◄──Redis──►│ remote-runner.js │
-│  - ollama:3b     │   bus     │  - ollama:8b      │   bus     │  - task runner   │
-│  - task runner   │           │  - rag             │           │  - visuals       │
-└─────────────────┘            │  - remote-agent    │           └─────────────────┘
-                               │    proxies         │
+│  - agent-x       │   bus     │  - local agents   │   bus     │  - agent-y       │
+│  - agent-y       │           │  - remote-agent   │           │  - agent-z       │
+└─────────────────┘            │    proxies         │           └─────────────────┘
                                └──────────────────┘
 ```
 
@@ -79,7 +85,7 @@ FX Mac (.61)                    Mech Mac (.60)                   Show Mac (.62)
 
 ```
 src/
-  remote-agent-runner.js    # Runs on remote Macs
+  remote-agent-runner.js    # Runs on any remote machine
   agents/
     remote-agent.js         # Proxy for orchestrator
 test/
@@ -91,7 +97,7 @@ examples/
 ### Hints
 
 - Use the `request()` pattern from RedisBus for task routing (it already works)
-- Keep the runner minimal — it should be a single file you can `scp` to any Mac and run
+- Keep the runner minimal — it should be a single file you can `scp` to any machine and run
 - Tests should use the same MockRedis pattern from `test/redis-bus.test.js`
 - The runner doesn't need Express — it only talks through Redis
 - FX and Show Mac already have Node at `~/local/node-v22.15.0-darwin-arm64/bin/`
@@ -102,7 +108,5 @@ examples/
 2. Add to REVIEW_QUEUE.md for my review
 3. Add tests to `test:all` in package.json
 4. Leave notes in MESSAGE_FOR_CLAUDE.md if you need anything
-
-Looking forward to reviewing it!
 
 — Claude

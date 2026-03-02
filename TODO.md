@@ -74,8 +74,23 @@ This changes what we should build next. We have real hardware, real AI, and a re
 
 ---
 
-## LOWER PRIORITY
+## VISION: General-Purpose Agent Orchestration
 
+This system is **not just a home automation controller**. Villa Romanza is the test bed, but the architecture is domain-agnostic:
+
+- **RL-based task routing** works for any agent pool (LLMs, APIs, microservices, human workers)
+- **Distributed agent mesh** (Multi-Machine Agents) works on any network, not just a villa LAN
+- **Compound agents** (pipeline chaining) apply to any multi-step workflow (ETL, CI/CD, content creation)
+- **Event sourcing + saga pattern** handle distributed transactions in any domain
+- **Context-aware modification** (see villa's time-aware modifier layer) — tasks adapt to environmental state
+
+Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that routes tasks to the best available agent, learns from outcomes, and distributes work across machines.
+
+### Future Directions (beyond home automation)
+- [ ] **Domain-agnostic agent interface** — Formalize the agent contract (execute, healthCheck, strengths, config)
+- [ ] **Plugin system** — Drop-in agent packages (npm modules) that self-register
+- [ ] **Context providers** — Pluggable context sources (not just sun elevation — could be market data, user activity, CI status)
+- [ ] **Web UI** — Beyond the villa dashboard — a proper agent management console
 - [ ] **Agent Marketplace** — Community-driven agent sharing, ratings
 - [ ] **Multi-tenancy** — Enterprise isolation, quotas
 - [ ] **API Reference** — Complete docs for all components
