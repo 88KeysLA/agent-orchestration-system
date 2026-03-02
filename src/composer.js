@@ -21,16 +21,19 @@ class AgentComposer {
     this._templates = new Map();
   }
 
-  // Register a named template
-  define(name, steps) {
-    this._templates.set(name, steps);
+  // Register a named template with optional pattern ('sequential' | 'parallel' | 'fallback')
+  define(name, steps, pattern = 'sequential') {
+    this._templates.set(name, { steps, pattern });
     return this;
   }
 
-  // Run a named template
+  // Run a named template using its declared pattern
   async run(name, task, vars = {}) {
-    const steps = this._templates.get(name);
-    if (!steps) throw new Error(`Template not found: ${name}`);
+    const tpl = this._templates.get(name);
+    if (!tpl) throw new Error(`Template not found: ${name}`);
+    const { steps, pattern } = tpl;
+    if (pattern === 'parallel') return this.parallel(steps, task);
+    if (pattern === 'fallback') return this.fallback(steps, task);
     return this.sequential(steps, task, vars);
   }
 

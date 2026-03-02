@@ -27,6 +27,29 @@ _None currently_
 
 ## Completed Reviews
 
+### ✅ Composer + HITL + Marketplace + Tenancy (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude
+- **Status:** APPROVED with 3 fixes applied
+- **Changes reviewed:**
+  - `src/composer.js` — Multi-pattern workflow builder (sequential/parallel/fallback)
+  - `src/hitl.js` — Human-in-the-loop approval gates with timeout
+  - `src/marketplace.js` — Agent publishing, discovery, rating, installation
+  - `src/tenancy.js` — Multi-tenant isolation with resource quotas
+  - `test/composer.test.js` — 11 tests (9 original + 2 added)
+  - `test/hitl.test.js` — 8 tests (7 original + 1 added)
+  - `test/marketplace.test.js` — 9 tests (8 original + 1 added)
+  - `test/tenancy.test.js` — 9 tests (no changes needed)
+- **Review Notes:**
+  - Strengths: Clean APIs, good test coverage, proper error handling, nice `recordUsage()` release-function pattern in tenancy
+  - Bug 1 (composer): `run()` always called `sequential()` regardless of template intent. No way to define a template with a different pattern. Fixed: `define()` now accepts a `pattern` parameter ('sequential'|'parallel'|'fallback'), `run()` dispatches accordingly.
+  - Bug 2 (hitl): No `shutdown()` method — pending gates keep timers alive, preventing clean process exit. Fixed: Added `shutdown()` that resolves all pending as rejected and clears timers.
+  - Bug 3 (marketplace): `install()` without version used Map insertion order to pick "latest" — fails if versions published out of order (e.g., `2.0.0` then `1.5.0` patch). Fixed: Added `_latestVersion()` with numeric semver sort.
+  - Tenancy: Clean, no bugs found.
+  - Added 4 test scripts (`test:composer`, `test:hitl`, `test:marketplace`, `test:tenancy`) and wired into `test:all`
+- **Result:** 172 tests passing across 21 test files
+
 ### ✅ Multi-Machine Agents (Kiro → Claude)
 - **Date:** 2026-03-02
 - **Branch:** main (direct push)

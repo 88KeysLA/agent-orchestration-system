@@ -112,6 +112,27 @@ async function run() {
     if (result !== 'inline:x') throw new Error(`Wrong: ${result}`);
   });
 
+  await test('define with fallback pattern dispatches correctly', async () => {
+    const c = new AgentComposer({
+      bad: makeAgent('bad', async () => { throw new Error('nope'); }),
+      good: makeAgent('good', async t => `ok:${t}`)
+    });
+    c.define('resilient', [{ agent: 'bad' }, { agent: 'good' }], 'fallback');
+    const { result, usedAgent } = await c.run('resilient', 'hi');
+    if (result !== 'ok:hi') throw new Error(`Wrong: ${result}`);
+    if (usedAgent !== 'good') throw new Error('Wrong agent');
+  });
+
+  await test('define with parallel pattern dispatches correctly', async () => {
+    const c = new AgentComposer({
+      a: makeAgent('a', async t => `A:${t}`),
+      b: makeAgent('b', async t => `B:${t}`)
+    });
+    c.define('fan-out', [{ agent: 'a' }, { agent: 'b' }], 'parallel');
+    const { result } = await c.run('fan-out', 'x');
+    if (!result.includes('A:x') || !result.includes('B:x')) throw new Error(`Wrong: ${result}`);
+  });
+
   console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

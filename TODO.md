@@ -72,6 +72,39 @@ This changes what we should build next. We have real hardware, real AI, and a re
   - **Assignee:** Kiro (original) + Claude (review, 3 bug fixes, 2 added tests)
   - **Status:** ✅ Complete — reviewed, fixed, 135 tests across 17 files
 
+- [x] **Distributed Agent Mesh Live** — Remote agents wired into server.js, runners deployed
+  - `REMOTE_AGENTS` env var configures remote proxies at startup (Kiro's pattern)
+  - Deployed runners to FX Mac (.61) and Show Mac (.62) with crontab persistence
+  - Fixed Redis LAN binding (`--protected-mode no --bind 0.0.0.0`)
+  - Fixed `healthCheck.bind(agent)` bug in orchestrator.js (affected ALL agents)
+  - `/api/agents` returns type, latency, capabilities; dashboard has latency column
+  - **Assignee:** Claude (wiring + deployment) + Kiro (env var pattern)
+  - **Status:** ✅ Complete — 3 machines communicating, 1ms latency
+
+- [x] **AgentComposer** — Multi-pattern workflow builder
+  - `src/composer.js` — define/run templates with sequential, parallel, or fallback patterns
+  - `test/composer.test.js` — 11 tests
+  - **Assignee:** Kiro (original) + Claude (review, pattern dispatch fix, 2 added tests)
+  - **Status:** ✅ Complete — reviewed, fixed
+
+- [x] **HITL Approval Gates** — Human-in-the-loop task approval
+  - `src/hitl.js` — Pattern-matching gates, timeout with configurable default, approve/reject API
+  - `test/hitl.test.js` — 8 tests
+  - **Assignee:** Kiro (original) + Claude (review, shutdown method, 1 added test)
+  - **Status:** ✅ Complete — reviewed, fixed
+
+- [x] **Agent Marketplace** — Agent publishing, discovery, rating, installation
+  - `src/marketplace.js` — Publish, search, rate, install agents into orchestrator
+  - `test/marketplace.test.js` — 9 tests
+  - **Assignee:** Kiro (original) + Claude (review, semver sort fix, 1 added test)
+  - **Status:** ✅ Complete — reviewed, fixed
+
+- [x] **Multi-Tenancy** — Tenant isolation with resource quotas
+  - `src/tenancy.js` — Create tenants, hourly + concurrent quotas, usage tracking
+  - `test/tenancy.test.js` — 9 tests
+  - **Assignee:** Kiro
+  - **Status:** ✅ Complete — reviewed, no bugs found
+
 ---
 
 ## VISION: General-Purpose Agent Orchestration
@@ -91,8 +124,10 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [ ] **Plugin system** — Drop-in agent packages (npm modules) that self-register
 - [ ] **Context providers** — Pluggable context sources (not just sun elevation — could be market data, user activity, CI status)
 - [ ] **Web UI** — Beyond the villa dashboard — a proper agent management console
-- [ ] **Agent Marketplace** — Community-driven agent sharing, ratings
-- [ ] **Multi-tenancy** — Enterprise isolation, quotas
+- [x] **Agent Marketplace** — Community-driven agent sharing, ratings (src/marketplace.js)
+- [x] **Multi-tenancy** — Enterprise isolation, quotas (src/tenancy.js)
+- [x] **HITL Approval Gates** — Human-in-the-loop task approval (src/hitl.js)
+- [x] **AgentComposer** — Multi-pattern workflow templates (src/composer.js)
 - [ ] **API Reference** — Complete docs for all components
 - [ ] **Deployment Guide** — Docker, production best practices
 
@@ -127,7 +162,7 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Epsilon Fix** — SimpleRL epsilon=0 was treated as falsy (Claude)
 - [x] **Redis Bus** — Redis pub/sub cross-machine messaging, reviewed + fixed + deployed (Kiro + Claude)
 - [x] **Multi-Machine Agents** — Remote runner + proxy + latency tracking, reviewed + fixed (Kiro + Claude)
-- [x] **135 Tests** — 17 test files, all passing (Kiro + Claude)
+- [x] **172 Tests** — 21 test files, all passing (Kiro + Claude)
 
 ---
 

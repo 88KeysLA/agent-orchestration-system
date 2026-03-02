@@ -69,6 +69,21 @@ async function run() {
     if (hitl.reject('nope')) throw new Error('Should return false');
   });
 
+  await test('shutdown resolves all pending as rejected', async () => {
+    const hitl = new HITL({ timeout: 60000 });
+    hitl.addGate('risky', async () => {});
+    const p1 = hitl.check('s1', 'risky task 1');
+    const p2 = hitl.check('s2', 'risky task 2');
+    await new Promise(r => setTimeout(r, 10));
+    if (hitl.pending.length !== 2) throw new Error('Should have 2 pending');
+    hitl.shutdown();
+    const r1 = await p1;
+    const r2 = await p2;
+    if (r1.approved || r2.approved) throw new Error('Both should be rejected');
+    if (r1.reason !== 'shutdown') throw new Error('Wrong reason');
+    if (hitl.pending.length !== 0) throw new Error('Should be cleared');
+  });
+
   console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

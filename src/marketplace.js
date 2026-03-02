@@ -53,11 +53,24 @@ class AgentMarketplace {
   install(name, orchestrator, version) {
     const listing = this._listings.get(name);
     if (!listing) throw new Error(`Agent not found: ${name}`);
-    const ver = version || [...listing.versions.keys()].pop();
+    const ver = version || this._latestVersion(listing);
     const agent = listing.versions.get(ver);
     if (!agent) throw new Error(`Version not found: ${ver}`);
     orchestrator.registerAgent(name, ver, agent, listing.metadata);
     return ver;
+  }
+
+  // Compare semver strings numerically (handles most common cases)
+  _latestVersion(listing) {
+    const versions = [...listing.versions.keys()];
+    return versions.sort((a, b) => {
+      const pa = a.split('.').map(Number);
+      const pb = b.split('.').map(Number);
+      for (let i = 0; i < 3; i++) {
+        if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0);
+      }
+      return 0;
+    }).pop();
   }
 
   get(name) {

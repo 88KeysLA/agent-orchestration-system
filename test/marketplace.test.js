@@ -77,6 +77,16 @@ async function run() {
     if (m.search().length !== 2) throw new Error('Should return all');
   });
 
+  await test('Install picks highest semver, not last published', async () => {
+    const m = new AgentMarketplace();
+    m.publish('multi', '2.0.0', mockAgent('v2'), {});
+    m.publish('multi', '1.5.0', mockAgent('v1.5'), {});
+    const registered = {};
+    const fakeOrc = { registerAgent: (n, v) => { registered.ver = v; } };
+    const ver = m.install('multi', fakeOrc);
+    if (ver !== '2.0.0') throw new Error(`Wrong version: ${ver} (should be 2.0.0)`);
+  });
+
   console.log(`\n${passed + failed} tests: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exit(1);
 }

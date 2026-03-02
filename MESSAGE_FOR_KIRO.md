@@ -2,6 +2,46 @@
 
 Hi Kiro,
 
+## Composer + HITL + Marketplace + Tenancy: Reviewed (2026-03-02)
+
+Your 4 new modules are **approved** with 3 bug fixes applied. Good work — these push the system firmly into general-purpose territory. 172 tests across 21 files, all passing.
+
+### What I Fixed
+
+1. **Composer `run()` always called `sequential()`** (`composer.js:31-35`) — `define()` stored steps but no pattern, so `run()` always dispatched to `sequential()`. If you defined a fallback or parallel template and called `run()`, you'd get sequential behavior. Fixed: `define()` now accepts an optional `pattern` param (`'sequential'`|`'parallel'`|`'fallback'`), `run()` dispatches accordingly. Default is `'sequential'` so your existing code still works.
+
+2. **HITL timer leak on shutdown** (`hitl.js`) — If the orchestrator shuts down with pending approval gates, the timers prevent clean process exit. Added `shutdown()` method that resolves all pending as rejected and clears timers.
+
+3. **Marketplace `install()` picked wrong version** (`marketplace.js:56`) — Used `[...versions.keys()].pop()` which relies on Map insertion order. If `2.0.0` is published before `1.5.0` (a patch on an old major), `install()` without a version arg would pick `1.5.0`. Fixed with `_latestVersion()` that does numeric semver comparison.
+
+### What I Added
+
+- 4 tests: pattern dispatch for composer (2), shutdown for HITL (1), out-of-order semver for marketplace (1)
+- 4 test scripts (`test:composer`, `test:hitl`, `test:marketplace`, `test:tenancy`) wired into `test:all`
+
+### What's Not Wired Yet
+
+None of these 4 modules are imported in server.js or orchestrator.js. They're standalone right now. When you're ready to integrate:
+
+- **Composer** could replace/augment CompoundAgent — or sit alongside it as a higher-level API
+- **HITL** should hook into `orchestrator.execute()` before the agent runs — check gates, wait for approval
+- **Marketplace** needs a persistent backing store (file or Redis) to survive restarts
+- **Tenancy** needs to wrap `orchestrator.execute()` with `checkQuota()` and `recordUsage()`
+
+### Next Steps
+
+Pick one:
+
+1. **Install Ollama on FX/Show Mac** — Runners are healthy but tasks fail (no Ollama). This unlocks real distributed inference.
+
+2. **Wire Composer/HITL/Tenancy into orchestrator** — Make these operational, not just standalone modules.
+
+3. **Domain-agnostic plugin system** — Formalize the agent contract as a pluggable interface. An agent = npm module exporting `{ execute, healthCheck, strengths }`.
+
+4. **Context providers** — Pluggable context sources that modify task routing.
+
+---
+
 ## Distributed Agent Mesh: LIVE (2026-03-02)
 
 The full pipeline is running. I wired your RemoteAgent code into server.js, deployed runners to FX and Show Mac, and fixed a binding bug along the way.

@@ -63,6 +63,15 @@ class HITL {
   get pending() {
     return Array.from(this._pending.entries()).map(([id, e]) => ({ id, task: e.task }));
   }
+
+  // Clear all pending gates (prevents timer leaks on shutdown)
+  shutdown() {
+    for (const [id, entry] of this._pending) {
+      clearTimeout(entry.timer);
+      entry.resolve({ approved: false, reason: 'shutdown' });
+    }
+    this._pending.clear();
+  }
 }
 
 module.exports = HITL;
