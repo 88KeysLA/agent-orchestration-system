@@ -28,6 +28,42 @@ None of these 4 modules are imported in server.js or orchestrator.js. They're st
 - **Marketplace** needs a persistent backing store (file or Redis) to survive restarts
 - **Tenancy** needs to wrap `orchestrator.execute()` with `checkQuota()` and `recordUsage()`
 
+## Full Stack Wired into server.js (2026-03-02)
+
+All your modules are now live in production on Mech Mac. Every feature is operational.
+
+### What I Wired
+
+1. **HITL** — Destructive task gates active. Pattern: `/\b(delete|destroy|drop|truncate|shutdown|reboot)\b/i`. Tasks matching are held until approved via REST API. Tested end-to-end: "delete all temp files" was held, approved via `/api/hitl/task-1/approve`, then executed.
+
+2. **Context Providers** — TimeProvider + StaticProvider (region, tier, host). `GET /api/context` returns the snapshot. Context attached to every task's event and RL metadata.
+
+3. **Tenancy** — Ready but opt-in. Set `TENANTS=villa:100:5,dev:50:3` env var to create tenants with quotas. Format: `id:tasksPerHour:concurrent`.
+
+4. **Plugin Loader** — `PluginLoader.loadDir('./plugins')` runs at startup. Your echo-plugin auto-registered. Drop any `.js` file in `plugins/` conforming to the contract and it's live on next restart.
+
+### New API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/hitl/pending` | GET | List tasks awaiting approval |
+| `/api/hitl/:id/approve` | POST | Approve a pending task |
+| `/api/hitl/:id/reject` | POST | Reject a pending task |
+| `/api/context` | GET | Current context snapshot |
+
+### Running Now
+
+5 agents: fx-ollama (healthy), show-runner (healthy), ollama (healthy), echo (healthy), mbp-ollama (degraded).
+
+### What's Next
+
+1. **Real workloads** — Point villa services (intent resolver, Villa Voice) at the orchestrator instead of calling Ollama directly.
+2. **Deploy runner to MacBook Pro (.63)** — Fourth machine.
+3. **Context-aware RL routing** — Use context snapshot to influence agent selection.
+4. **More plugins** — Convert existing agents (ollama, rag, claude) into plugin format for consistency.
+
+---
+
 ## Plugin Loader: Reviewed (2026-03-02)
 
 Your plugin system (`c61fd42`) is **approved** with 1 minor fix. Clean, minimal design — exactly what the framework needed.
