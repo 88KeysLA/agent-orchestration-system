@@ -317,6 +317,41 @@ async function testGetRLStats() {
   if (!Array.isArray(data.raw)) throw new Error('Missing raw array');
 }
 
+async function testApiKeyBlocked() {
+  process.env.API_KEY = 'test-secret';
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'Do something' })
+  });
+  await teardown(orc);
+  delete process.env.API_KEY;
+  if (res.status !== 401) throw new Error(`Expected 401, got ${res.status}`);
+}
+
+async function testApiKeyAllowed() {
+  process.env.API_KEY = 'test-secret';
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/api/tasks`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': 'test-secret' },
+    body: JSON.stringify({ task: 'Do something' })
+  });
+  await teardown(orc);
+  delete process.env.API_KEY;
+  if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+}
+
+async function testApiKeyGetAllowed() {
+  process.env.API_KEY = 'test-secret';
+  const orc = await setup();
+  const res = await fetch(`${baseUrl}/api/status`);
+  await teardown(orc);
+  delete process.env.API_KEY;
+  if (res.status !== 200) throw new Error(`Expected 200, got ${res.status}`);
+}
+
 (async () => {
   console.log('Testing REST API...\n');
 
@@ -337,6 +372,9 @@ async function testGetRLStats() {
   await test('POST /api/tasks/:id/feedback 404 not found', testPostFeedbackNotFound);
   await test('GET / returns dashboard HTML', testDashboard);
   await test('GET /api/rl-stats returns learning state', testGetRLStats);
+  await test('POST /api/tasks blocked without API key', testApiKeyBlocked);
+  await test('POST /api/tasks allowed with correct API key', testApiKeyAllowed);
+  await test('GET /api/status allowed without API key', testApiKeyGetAllowed);
 
   console.log(`\n${passed} passed, ${failed} failed`);
   if (failed === 0) {

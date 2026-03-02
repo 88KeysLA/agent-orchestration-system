@@ -12,6 +12,17 @@ function createAPI(orchestrator) {
   const app = express();
   app.use(express.json());
 
+  // API key auth — protects mutating endpoints if API_KEY env var is set
+  const API_KEY = process.env.API_KEY;
+  if (API_KEY) {
+    app.use('/api', (req, res, next) => {
+      if (req.method === 'GET') return next();
+      const key = req.headers['x-api-key'] || req.headers['authorization']?.replace('Bearer ', '');
+      if (key !== API_KEY) return res.status(401).json({ error: 'Unauthorized' });
+      next();
+    });
+  }
+
   // GET / — Status dashboard
   app.get('/', async (req, res) => {
     try {
