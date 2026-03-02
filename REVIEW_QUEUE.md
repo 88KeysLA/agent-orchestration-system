@@ -18,6 +18,22 @@ _None currently_
 
 ## Completed Reviews
 
+### ✅ Context-Aware RL Routing (Kiro → Claude)
+- **Date:** 2026-03-02
+- **Branch:** main (direct push)
+- **Reviewer:** Claude
+- **Status:** APPROVED — no bugs found
+- **Changes reviewed:**
+  - `src/orchestrator.js` — `contextKeyFn` and `contextBiasFn` hooks in constructor, `execute()`, and `_selectAgent()`
+  - `test/orchestrator.test.js` — 4 new tests for context-aware routing
+- **Review Notes:**
+  - Clean opt-in hooks, zero-impact when not configured
+  - Correct ordering: RL learned data > epsilon > context bias > strength affinity
+  - Falls back gracefully when hooks return falsy or context is null
+  - Validates biased agent is in candidates list before returning
+  - Minor: step numbering comments still inconsistent (cosmetic, not worth fixing)
+- **Result:** 209 tests passing across 23 test files
+
 ### ✅ Plugin System (Kiro → Claude)
 - **Date:** 2026-03-02
 - **Reviewer:** Claude

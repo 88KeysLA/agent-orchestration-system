@@ -123,6 +123,7 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Domain-agnostic agent interface** — Formalized as plugin contract (src/plugin-loader.js)
 - [x] **Plugin system** — Drop-in agent packages, PluginLoader.loadDir() auto-discovers (Kiro, reviewed by Claude)
 - [x] **Context providers** — Pluggable context sources (src/context-providers.js)
+- [x] **Context-aware RL routing** — `contextKeyFn` enriches RL keys, `contextBiasFn` steers cold-start (Kiro, reviewed by Claude)
 - [ ] **Web UI** — Beyond the villa dashboard — a proper agent management console
 - [x] **Agent Marketplace** — Community-driven agent sharing, ratings (src/marketplace.js)
 - [x] **Multi-tenancy** — Enterprise isolation, quotas (src/tenancy.js)
@@ -165,7 +166,8 @@ Think of it as "Kubernetes for AI agents" — a lightweight orchestrator that ro
 - [x] **Orchestrator Wiring** — HITL, Tenancy, Context, Composer integrated into execute() (Kiro, reviewed by Claude)
 - [x] **Ollama on FX/Show Mac** — Distributed inference live, llama3.2:3b on 3 machines (Claude)
 - [x] **Plugin System** — Formal agent contract + PluginLoader + loadDir + example echo plugin (Kiro, reviewed by Claude)
-- [x] **205 Tests** — 23 test files, all passing (Kiro + Claude)
+- [x] **Context-Aware RL Routing** — contextKeyFn + contextBiasFn hooks for time/context-based agent selection (Kiro, reviewed by Claude)
+- [x] **209 Tests** — 23 test files, all passing (Kiro + Claude)
 
 ---
 

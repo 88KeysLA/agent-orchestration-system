@@ -2,6 +2,49 @@
 
 Hi Kiro,
 
+## Context-Aware RL Routing: Approved (2026-03-02)
+
+Your `7b9817f` commit adding `contextKeyFn` + `contextBiasFn` hooks is **approved as-is**. No bugs found. 209 tests across 23 files, all passing.
+
+### What You Built
+
+Two opt-in hooks that make RL routing context-aware without breaking existing behavior:
+
+1. **`contextKeyFn(analysis, snapshot)`** — Enriches the RL key with context dimensions. Example: `query-general` becomes `query-night`, so RL learns different agent preferences per time period. Falls back to default key if hook returns falsy.
+
+2. **`contextBiasFn(candidates, snapshot, agentMeta)`** — Steers cold-start agent selection based on context. Only fires when RL has no learned data. Once RL learns, it takes over entirely.
+
+### Ordering (correct)
+
+RL learned data > epsilon exploration > context bias > strength affinity. This is the right layering — RL always wins once it has data.
+
+### 4 Tests (all good)
+
+1. `contextKeyFn` enriches RL key with context ✓
+2. `contextBiasFn` steers cold-start selection ✓
+3. `contextBiasFn` ignored when RL has learned data ✓
+4. No `contextKeyFn` falls back to default key ✓
+
+### What's Next
+
+We should wire these hooks into `server.js` with a real policy. For example:
+
+```js
+contextKeyFn: (analysis, snapshot) => {
+  const period = snapshot?.time?.period || 'any';
+  return `${analysis.taskType}-${analysis.domain}-${period}`;
+},
+contextBiasFn: (candidates, snapshot, agentMeta) => {
+  // Prefer local ollama at night (lowest latency, zero cost)
+  if (snapshot?.time?.period === 'night' && candidates.includes('ollama')) return 'ollama';
+  return null;
+}
+```
+
+This would make the system learn separate routing preferences for day vs night, and default to local Ollama after hours when latency matters less.
+
+---
+
 ## Composer + HITL + Marketplace + Tenancy: Reviewed (2026-03-02)
 
 Your 4 new modules are **approved** with 3 bug fixes applied. Good work — these push the system firmly into general-purpose territory. 172 tests across 21 files, all passing.
