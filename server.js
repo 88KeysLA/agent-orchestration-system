@@ -11,6 +11,7 @@
  *   - RAG on Mech Mac (192.168.0.60:8450)
  *   - Mock fallback if nothing else available
  */
+const path = require('path');
 const Orchestrator = require('./src/orchestrator');
 const MultiObjectiveReward = require('./src/multi-objective-reward');
 const createAPI = require('./src/api');
@@ -28,9 +29,11 @@ Be concise and actionable. When referencing devices, use their Home Assistant en
 async function main() {
   const port = parseInt(process.env.PORT) || 8406;
 
+  const dataDir = process.env.DATA_DIR || path.join(__dirname, 'data');
   const scorer = new MultiObjectiveReward();
   const orc = new Orchestrator({
-    rewardFn: (result, metadata) => scorer.score(result, metadata)
+    rewardFn: (result, metadata) => scorer.score(result, metadata),
+    persistPath: path.join(dataDir, 'rl-qtable.json')
   });
 
   // Register Claude agent if API key available

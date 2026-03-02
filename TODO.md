@@ -1,170 +1,127 @@
-# 🎯 SHARED TODO - Agent Orchestration System
+# SHARED TODO - Agent Orchestration System
 
-**Last Updated:** 2026-03-02 05:16 UTC  
+**Last Updated:** 2026-03-02 06:00 UTC
 **Contributors:** Kiro, Claude
 
 ---
 
-## 🔥 PRIORITY 1: Real-Time AI Collaboration
+## NEW: Villa Romanza Infrastructure Available
 
-- [ ] **Set up shared message bus** (Redis/RabbitMQ)
-  - Enable Kiro ↔ Claude real-time communication
-  - Allow coordination across different machines
-  - Support distributed AI collaboration
-  - **Assignee:** TBD
-  - **Status:** Not started
+**Read VILLA_RESOURCES.md for full details.**
+
+The system is now **deployed and live** on the Villa Romanza home network:
+- **Live API**: `http://192.168.0.60:8406` — running on Mech Mac (M4 Mac Mini)
+- **Ollama**: llama3.1:8b at localhost — registered and executing real tasks
+- **RAG**: 40 docs, 798 chunks of villa knowledge — available when server is running
+- **Claude API**: Ready to register when API key is set
+- **5 Macs** on the network for distributed compute
+
+This changes what we should build next. We have real hardware, real AI, and a real deployment target.
 
 ---
 
-## 🏗️ CORE COMPONENTS (Remaining)
+## PRIORITY: Production Hardening (Claude — In Progress)
 
-- [ ] **Agent Marketplace**
-  - Community-driven agent sharing
-  - Rating and review system
-  - Version compatibility checks
-  - **Assignee:** TBD
-  - **Status:** Not started
+- [ ] **RL Persistence** — Save/load Q-table to disk
+  - Learning resets on every restart right now
+  - Critical for production — the system forgets everything it learned
+  - **Assignee:** Claude
+  - **Status:** In Progress
 
-- [ ] **Multi-tenancy**
-  - Enterprise isolation
-  - Resource quotas
-  - Tenant-specific configs
-  - **Assignee:** TBD
-  - **Status:** Not started
+- [ ] **Strength-Based Routing** — Wire agent strengths into selection
+  - Agents have `strengths` metadata (e.g., Claude: 'complex reasoning', Ollama: 'fast response')
+  - Meta-agent-router should use these for smarter agent selection
+  - **Assignee:** Claude
+  - **Status:** In Progress
+
+---
+
+## PRIORITY: Practical Features
 
 - [ ] **Human-in-the-loop**
-  - Approval gates
+  - Approval gates for high-stakes tasks
   - Manual intervention points
-  - Feedback collection
+  - Feedback collection (thumbs up/down on results)
   - **Assignee:** TBD
   - **Status:** Not started
 
 - [ ] **Agent Composition**
   - Reusable workflow patterns
-  - Composite agents
+  - Composite agents (chain RAG lookup → Ollama summary)
   - Template system
   - **Assignee:** TBD
   - **Status:** Not started
 
----
-
-## 📚 DOCUMENTATION
-
-- [ ] **API Reference**
-  - Complete API docs for all 8 components
-  - Usage examples for each
-  - Integration patterns
-  - **Assignee:** TBD
-  - **Status:** Not started
-
-- [ ] **Deployment Guide**
-  - Docker deployment
-  - Kubernetes deployment
-  - Serverless deployment
-  - Production best practices
+- [ ] **Multi-Machine Agents**
+  - FX Mac (.61), Show Mac (.62) as remote agent hosts
+  - Distribute workloads across 5 Macs
+  - Network-aware health checks
   - **Assignee:** TBD
   - **Status:** Not started
 
 ---
 
-## 🔬 EXAMPLES & WORKFLOWS
+## LOWER PRIORITY
 
-- [ ] **End-to-end workflow examples**
-  - Complete orchestration flows
-  - Real agent implementations
-  - Production-ready examples
-  - **Assignee:** TBD
-  - **Status:** Not started
-
-- [ ] **Integration examples**
-  - Connect all components
-  - Show best practices
-  - Performance optimization
-  - **Assignee:** TBD
-  - **Status:** Not started
+- [ ] **Agent Marketplace** — Community-driven agent sharing, ratings
+- [ ] **Multi-tenancy** — Enterprise isolation, quotas
+- [ ] **API Reference** — Complete docs for all components
+- [ ] **Deployment Guide** — Docker, production best practices
 
 ---
 
-## ✅ COMPLETED
+## COMPLETED
 
-- [x] **Message Bus** - Real-time agent communication (Kiro)
-- [x] **Simple RL** - Reinforcement learning (Kiro)
-- [x] **Event Store** - Event sourcing with time travel (Kiro)
-- [x] **Saga Pattern** - Distributed transactions (Kiro)
-- [x] **Health Monitor** - Auto-remediation (Kiro)
-- [x] **Agent Registry** - Versioning + canary (Kiro)
-- [x] **Explainer** - Transparent decisions (Kiro)
-- [x] **Dynamic Replanner** - Adaptive execution (Kiro)
-- [x] **Multi-Objective Optimizer** - Balance objectives (Kiro)
-- [x] **Orchestrator** - Full integration (Kiro + Claude merged)
-- [x] **Workflow Support** - Multi-step workflows (Claude)
-- [x] **Comprehensive Tests** - 8/8 orchestrator tests (Claude)
-
----
-
-## 📝 NOTES
-
-### How to Use This TODO
-
-**Before starting work:**
-1. Check this file for available tasks
-2. Assign yourself to a task
-3. Update status to "In Progress"
-4. Push changes so the other AI sees it
-
-**While working:**
-1. Update status with progress
-2. Add notes if needed
-3. Push regularly
-
-**After completing:**
-1. Move to "COMPLETED" section
-2. Add your name
-3. Push final changes
-
-### Communication Protocol
-
-**When you start a task:**
-```
-git pull
-# Edit TODO.md - assign yourself
-git add TODO.md
-git commit -m "TODO: Starting [task name]"
-git push
-```
-
-**When you finish a task:**
-```
-git pull
-# Edit TODO.md - move to completed
-git add TODO.md
-git commit -m "TODO: Completed [task name]"
-git push
-```
-
-**Check for updates:**
-```
-git pull
-# Read TODO.md for changes
-```
+- [x] **Message Bus** — Real-time agent communication (Kiro)
+- [x] **Simple RL** — Reinforcement learning with Q-learning (Kiro)
+- [x] **Event Store** — Event sourcing with time travel (Kiro)
+- [x] **Saga Pattern** — Distributed transactions with rollback (Kiro)
+- [x] **Health Monitor** — 3-state health, auto-remediation (Kiro)
+- [x] **Agent Registry** — Versioning, canary, blue-green (Kiro)
+- [x] **Explainer** — Transparent decision reasoning (Kiro)
+- [x] **Dynamic Replanner** — Adaptive mid-flight replanning (Kiro)
+- [x] **Multi-Objective Optimizer** — Balance objectives (Kiro)
+- [x] **Orchestrator** — Full integration harness (Kiro + Claude merged)
+- [x] **Workflow Support** — Multi-step saga workflows (Claude)
+- [x] **Multi-Objective Rewards** — 4-dimension scoring: quality, speed, cost, relevance (Claude)
+- [x] **Claude Agent** — Anthropic API wrapper with lazy SDK loading (Claude)
+- [x] **Ollama Agent** — Local LLM agent with native fetch (Claude)
+- [x] **RAG Agent** — Villa knowledge base query agent (Claude)
+- [x] **REST API** — Express API with 6 endpoints (Claude)
+- [x] **Server** — Auto-registration, Villa-aware system prompts (Claude)
+- [x] **Mech Mac Deployment** — Live on :8406, crontab persistent (Claude)
+- [x] **79 Tests** — 12 test files, all passing (Kiro + Claude)
 
 ---
 
-## 🎯 CURRENT FOCUS
+## NOTES
 
-**Week 1-2:** Core components (Marketplace, Multi-tenancy, Human-in-loop, Composition)  
-**Week 3:** Documentation (API reference, deployment guide)  
-**Week 4:** Examples and production hardening
+### Development Workflow
+```bash
+# Local development
+npm run test:all        # 79 tests
 
----
+# Deploy to Mech Mac
+./deploy.sh             # Pull + restart
+./deploy.sh --setup     # First-time clone + install + crontab
 
-## 🚀 VISION
+# Monitor
+ssh villaromanzamech@192.168.0.60 'tail -f ~/logs/agent-orchestration.log'
+```
 
-Build a world-class agent orchestration system that:
-- Coordinates multiple AI agents seamlessly
-- Learns and optimizes continuously
-- Scales to enterprise use
-- Enables AI-to-AI collaboration
-- Is production-ready and battle-tested
+### Available Agents (registered at startup)
+| Agent | Type | Best For |
+|-------|------|----------|
+| claude | Cloud API | Complex reasoning, code gen, analysis |
+| ollama | Local LLM | Fast response, zero cost, routine tasks |
+| rag | Local Vector | Villa knowledge, device lookup, docs |
 
-**Let's build it together!** 🤖↔️🤖
+### Key Files
+| File | Purpose |
+|------|---------|
+| `server.js` | Entry point, agent auto-registration |
+| `src/orchestrator.js` | Core integration harness |
+| `src/agents/*.js` | Agent implementations |
+| `src/api.js` | Express REST API |
+| `deploy.sh` | Mech Mac deployment |
+| `VILLA_RESOURCES.md` | Full infrastructure docs |

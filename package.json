@@ -14,7 +14,9 @@
     "test:api": "node test/api.test.js",
     "test:reward": "node test/multi-objective-reward.test.js",
     "test:rag": "node test/rag-agent.test.js",
-    "test:all": "node test/message-bus.test.js && node test/saga.test.js && node test/event-store.test.js && node test/registry.test.js && node test/health-monitor.test.js && node test/explainer.test.js && node test/replanner.test.js && node test/orchestrator.test.js && node test/multi-objective-reward.test.js && node test/agents.test.js && node test/api.test.js && node test/rag-agent.test.js",
+    "test:rl": "node test/rl-persistence.test.js",
+    "test:strengths": "node test/strength-routing.test.js",
+    "test:all": "node test/message-bus.test.js && node test/saga.test.js && node test/event-store.test.js && node test/registry.test.js && node test/health-monitor.test.js && node test/explainer.test.js && node test/replanner.test.js && node test/orchestrator.test.js && node test/multi-objective-reward.test.js && node test/agents.test.js && node test/api.test.js && node test/rag-agent.test.js && node test/rl-persistence.test.js && node test/strength-routing.test.js",
     "bootstrap": "node bootstrap.js"
   },
   "keywords": [

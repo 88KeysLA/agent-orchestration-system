@@ -17,7 +17,10 @@ const { analyzeTask, selectAgents, generateWorkflow } = require('./meta-agent-ro
 class Orchestrator {
   constructor(options = {}) {
     this.bus = new MessageBus();
-    this.rl = new SimpleRL();
+    this.rl = new SimpleRL({
+      persistPath: options.persistPath || null,
+      epsilon: options.epsilon
+    });
     this.eventStore = new EventStore();
     this.registry = new AgentRegistry();
     this.health = new HealthMonitor({
@@ -32,11 +35,13 @@ class Orchestrator {
 
     this.rewardFn = options.rewardFn || defaultReward;
     this.agents = new Map();
+    this._agentMeta = new Map();
     this._taskCounter = 0;
   }
 
   registerAgent(name, version, agent, metadata = {}) {
     this.agents.set(name, agent);
+    this._agentMeta.set(name, metadata);
 
     this.registry.register(name, version, agent, metadata);
     this.registry.setActive(name, version);
@@ -75,8 +80,8 @@ class Orchestrator {
     });
     const candidates = healthyAgents.length > 0 ? healthyAgents : agentNames;
 
-    // 3. RL selects best agent
-    const selectedAgent = this.rl.selectAgent(contextKey, candidates);
+    // 3. Select agent (strength-aware RL)
+    const selectedAgent = this._selectAgent(contextKey, candidates, analysis);
 
     // 4. Record decision with explainer
     const alternatives = candidates.map(name => ({
@@ -225,6 +230,41 @@ class Orchestrator {
       events: this.eventStore.getEvents(workflowId),
       duration: Date.now() - startTime
     };
+  }
+
+  _selectAgent(contextKey, candidates, analysis) {
+    // If RL has learned data for this context, defer to RL
+    const hasData = candidates.some(c => this.rl.getQ(contextKey, c) > 0);
+    if (hasData) {
+      return this.rl.selectAgent(contextKey, candidates);
+    }
+
+    // No RL data yet — use strength affinity to pick the best initial agent
+    // (still respect epsilon for exploration)
+    if (Math.random() < this.rl.epsilon) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+
+    let best = candidates[0];
+    let bestScore = 0;
+    const taskWords = `${analysis.taskType} ${analysis.domain} ${analysis.urgency}`.toLowerCase();
+
+    for (const name of candidates) {
+      const meta = this._agentMeta.get(name) || {};
+      const strengths = meta.strengths || [];
+      let score = 0;
+      for (const s of strengths) {
+        const words = s.toLowerCase().split(/\s+/);
+        for (const w of words) {
+          if (taskWords.includes(w)) score++;
+        }
+      }
+      if (score > bestScore) {
+        bestScore = score;
+        best = name;
+      }
+    }
+    return best;
   }
 
   getStatus() {
