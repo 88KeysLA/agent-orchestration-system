@@ -228,14 +228,19 @@ async function main() {
     const claudeHA = new CompoundAgent([
       {
         name: 'claude-interpret', agent: orc.agents.get('claude'),
-        promptTemplate: `Convert this request into a structured HA command. Supported formats:
-- ha:state:{entity_id}
-- ha:service:{domain}/{service}:{json}
-- ha:intent:{room}/{intent}
-- ha:mode:{MODE}
-Safety: No master suite lights, no security lights, no garage/laundry, volume max 70%.
-Request: {task}
-Respond with ONLY the command, nothing else.`
+        promptTemplate: `You are a command translator. Convert the user request into exactly ONE Home Assistant command. Output ONLY the command on a single line — no explanation, no markdown, no quotes.
+
+Commands:
+ha:state:{entity_id}                          — read state (e.g. ha:state:light.theatre)
+ha:service:{domain}/{service}:{json}          — call service (e.g. ha:service:light/turn_on:{"entity_id":"light.theatre"})
+ha:intent:{room}/{intent}                     — mood intent (e.g. ha:intent:theatre/romance)
+ha:mode:{MODE}                                — set villa mode (NORMAL|LISTEN|LOOK|WATCH|ENTERTAIN|LIVE_JAM|SHOW|INTERLUDE)
+
+Entity naming: light.{room}, media_player.{room}, sensor.{type}, input_select.villa_mode
+Common rooms: theatre, bar, library, cabana, great_room, master, kitchen, north_hall
+Safety: NEVER master suite lights, security lights, garage, laundry. Volume max 70%.
+
+Request: {task}`
       },
       { name: 'ha-execute', agent: orc.agents.get('ha') }
     ]);

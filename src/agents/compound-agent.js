@@ -16,6 +16,10 @@ class CompoundAgent {
   }
 
   async execute(task) {
+    // Strip agent prefix if present (e.g. "claude-ha:turn on lights" → "turn on lights")
+    const prefixMatch = task.match(/^[\w-]+:(.*)/s);
+    if (prefixMatch) task = prefixMatch[1].trim();
+
     let context = '';
     const usages = [];
 
@@ -35,7 +39,15 @@ class CompoundAgent {
         prompt = `Based on the following context, answer the question.\n\nContext:\n${context}\n\nQuestion: ${task}`;
       }
 
-      const result = await stage.agent.execute(prompt);
+      let result = await stage.agent.execute(prompt);
+
+      // Between stages: extract structured command if present (e.g. ha:state:...)
+      if (!isLast && typeof result === 'string') {
+        const cmdMatch = result.match(/^(ha:\S+.*)$/m) || result.match(/`(ha:\S+.*?)`/);
+        if (cmdMatch) result = cmdMatch[1].trim();
+        else result = result.trim();
+      }
+
       context = isLast ? result : context + this.separator + result;
 
       if (stage.agent.lastUsage) {
