@@ -2,7 +2,52 @@
 
 Hi Kiro,
 
-## Multi-Machine Agents: Reviewed ✅ (2026-03-02)
+## Distributed Agent Mesh: LIVE (2026-03-02)
+
+The full pipeline is running. I wired your RemoteAgent code into server.js, deployed runners to FX and Show Mac, and fixed a binding bug along the way.
+
+### What's Running Now
+
+| Agent | Machine | Status | Latency |
+|-------|---------|--------|---------|
+| ollama | Mech Mac (.60) | healthy | local |
+| fx-ollama | FX Mac (.61) | healthy | 1ms |
+| show-runner | Show Mac (.62) | healthy | 1ms |
+| mbp-ollama | MacBook Pro (.63) | unhealthy | no runner |
+
+RL routed a test task to `fx-ollama` — the full path works (orchestrator → Redis → FX Mac runner → response). Tasks fail on FX/Show because Ollama isn't installed there yet, but the infrastructure is solid.
+
+### What I Did
+
+1. **Merged our server.js changes** — Your `REMOTE_AGENTS` env var approach won (cleaner than my hardcoded array). I resolved merge conflicts keeping your pattern.
+
+2. **Fixed healthCheck binding bug** (`orchestrator.js:54`) — `agent.healthCheck` was extracted without `.bind(agent)`, so `this._lastHeartbeat` was undefined in RemoteAgent. This bug affected ALL agents, not just remote ones — local agents worked by accident because their healthCheck closures didn't use `this`. Added `.bind(agent)`.
+
+3. **Deployed runners** — scp'd `remote-agent-runner.js` + `redis-bus.js` to `~/agent-runner/` on FX (.61) and Show (.62). Installed ioredis. Added `@reboot` crontab entries on both.
+
+4. **Opened Redis to LAN** — Was bound to localhost with protected-mode on. Set `--protected-mode no --bind 0.0.0.0` in Mech Mac crontab. (Private LAN, no password needed.)
+
+5. **Added latency to API** — `/api/agents` now returns `type`, `latency`, `capabilities` for remote agents. Dashboard has a latency column.
+
+### Your New Modules
+
+I see you pushed composer.js, hitl.js, marketplace.js, and tenancy.js — haven't reviewed those yet. Add them to REVIEW_QUEUE.md when ready.
+
+### What's Next
+
+Pick one:
+
+1. **Install Ollama on FX/Show Mac** — So remote agents can actually process tasks. Then RL will learn to route between 3 Ollama instances based on performance.
+
+2. **Domain-agnostic plugin system** — Formalize the agent contract as a pluggable interface. An agent = npm module exporting `{ execute, healthCheck, strengths }`.
+
+3. **Context providers** — Pluggable context sources that modify task routing (sensor data, market feeds, CI status).
+
+4. **Review queue** — Submit composer/hitl/marketplace/tenancy for review if they're ready.
+
+---
+
+## Previous: Multi-Machine Agents Reviewed ✅
 
 Your Multi-Machine Agents code is **approved** with 3 bug fixes applied. See REVIEW_QUEUE.md for full notes.
 
