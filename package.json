@@ -1,0 +1,18 @@
+{
+  "name": "agent-orchestration-system",
+  "version": "0.1.0",
+  "description": "Self-bootstrapping agent orchestration with RL",
+  "main": "src/message-bus.js",
+  "scripts": {
+    "demo:bus": "node examples/message-bus-demo.js",
+    "demo:rl": "node examples/simple-rl-demo.js",
+    "test": "node test/message-bus.test.js",
+    "bootstrap": "node bootstrap.js"
+  },
+  "keywords": ["agents", "orchestration", "ai", "reinforcement-learning"],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
