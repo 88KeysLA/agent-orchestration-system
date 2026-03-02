@@ -447,6 +447,18 @@ async function testErrorHandling() {
     if (![...seenKeys].some(k => k.includes('-'))) throw new Error('Expected default taskType-domain key');
   });
 
+  await test('Direct prefix routing bypasses RL', async () => {
+    const orc = new Orchestrator({ epsilon: 1 }); // epsilon=1 means always random
+    orc.registerAgent('ha', '1.0.0', { execute: async t => `HA:${t}`, healthCheck: async () => true }, {});
+    orc.registerAgent('ollama', '1.0.0', { execute: async t => `LLM:${t}`, healthCheck: async () => true }, {});
+    orc.registerAgent('echo', '1.0.0', { execute: async t => `ECHO:${t}`, healthCheck: async () => true }, {});
+    // Even with epsilon=1 (pure random), ha: prefix should always route to ha
+    for (let i = 0; i < 10; i++) {
+      const result = await orc.execute('ha:state:light.theatre');
+      if (result.agent !== 'ha') throw new Error(`Expected ha, got ${result.agent} on iteration ${i}`);
+    }
+  });
+
   await test('Composer available on orchestrator with registered agents', async () => {
     const orc = new Orchestrator();
     orc.registerAgent('a', '1.0.0', { execute: async t => `A:${t}`, healthCheck: async () => true }, {});
