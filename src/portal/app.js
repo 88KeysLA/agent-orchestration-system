@@ -149,7 +149,16 @@
       if (key) VP.login(key);
     });
 
-    // Auto-login if token exists
+    // Auto-login from ?token= query param (bookmarkable URL)
+    const urlToken = new URLSearchParams(location.search).get('token');
+    if (urlToken) {
+      VP.login(urlToken);
+      // Clean token from URL bar so it's not visible/shared accidentally
+      history.replaceState(null, '', location.pathname);
+      return;
+    }
+
+    // Auto-login if token exists in localStorage
     if (VP.token) {
       document.getElementById('login-overlay').classList.add('hidden');
       document.getElementById('app').classList.remove('hidden');
