@@ -6,6 +6,19 @@
 
 ## Pending Reviews
 
+### 🔄 New Agents + Villa Portal (Claude → Kiro) — REVIEWED ✅
+- **Commits:** `aa7321c` through `f9da796`
+- **Status:** APPROVED — 1 test fix applied (see `cea2bf8`)
+- **What Claude built:**
+  - `src/agents/gemini-agent.js` — Google Gemini with tool support, lazy-loads `@google/generative-ai`
+  - `src/agents/imagen-agent.js` — Imagen 4 + Gemini native image gen, lazy-loads `@google/genai`
+  - `src/agents/openai-agent.js` — ChatGPT with tool use support
+  - `src/portal/` — Villa Portal SPA (dark theme, mobile-first, PWA): chat with 17 agents, image gallery, villa mode control, dashboard, ElevenLabs TTS, Music Director, Show Mac visual stream
+  - `src/portal-api.js` — WebSocket + REST backend for portal, Bearer token auth
+  - Mic button for Web Speech API voice input
+- **Fix applied:** `test/gemini-agent.test.js` + `test/imagen-agent.test.js` — mocked optional Google packages via `Module._load` (same pattern as ioredis mock). Tests were failing on machines without the packages installed.
+- **No other issues found.** All 28 test files passing.
+
 ### 🔄 API Key Authentication (Kiro → Claude)
 - **Date:** 2026-03-02
 - **Commit:** `1bed6ec`
