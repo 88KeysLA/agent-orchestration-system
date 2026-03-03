@@ -18,6 +18,8 @@ const createAPI = require('./src/api');
 
 let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus, RemoteAgent, HAAgent, HAContextProvider;
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
+let GeminiAgent;
+try { GeminiAgent = require("./src/agents/gemini-agent"); } catch {}
 try { OllamaAgent = require('./src/agents/ollama-agent'); } catch {}
 try { RAGAgent = require('./src/agents/rag-agent'); } catch {}
 try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
@@ -156,6 +158,19 @@ async function main() {
     console.log('Registered: claude (Anthropic API)');
   }
 
+  // Register Gemini agent if API key available
+  if (GeminiAgent && process.env.GEMINI_API_KEY) {
+    const gemini = new GeminiAgent({
+      systemPrompt: VILLA_SYSTEM_PROMPT,
+      maxTokens: 8192
+    });
+    orc.registerAgent('gemini', '1.0.0', gemini, {
+      type: 'cloud', provider: 'google',
+      strengths: ['long context', 'code generation', 'analysis', 'multimodal', 'app development']
+    });
+    console.log('Registered: gemini (Google Gemini API)');
+  }
+
   // Register Ollama agent if host is reachable
   if (OllamaAgent) {
     const ollamaHost = process.env.OLLAMA_HOST || 'http://192.168.0.60:11434';
@@ -271,6 +286,34 @@ Request: {task}`
     console.log('Registered: claude-ha (Claude NL + HA execution)');
   }
 
+  // Register compound Gemini→HA agent (Gemini interprets NL, HA executes)
+  if (CompoundAgent && orc.agents.has('gemini') && orc.agents.has('ha')) {
+    const geminiHA = new CompoundAgent([
+      {
+        name: 'gemini-interpret', agent: orc.agents.get('gemini'),
+        promptTemplate: `You are a command translator. Convert the user request into exactly ONE Home Assistant command. Output ONLY the command on a single line — no explanation, no markdown, no quotes.
+
+Commands:
+ha:state:{entity_id}                          — read state (e.g. ha:state:light.theatre)
+ha:service:{domain}/{service}:{json}          — call service (e.g. ha:service:light/turn_on:{"entity_id":"light.theatre"})
+ha:intent:{room}/{intent}                     — mood intent (e.g. ha:intent:theatre/romance)
+ha:mode:{MODE}                                — set villa mode (NORMAL|LISTEN|LOOK|WATCH|ENTERTAIN|LIVE_JAM|SHOW|INTERLUDE)
+
+Entity naming: light.{room}, media_player.{room}, sensor.{type}, input_select.villa_mode
+Common rooms: theatre, bar, library, cabana, great_room, master, kitchen, north_hall
+Safety: NEVER master suite lights, security lights, garage, laundry. Volume max 70%.
+
+Request: {task}`
+      },
+      { name: 'ha-execute', agent: orc.agents.get('ha') }
+    ]);
+    orc.registerAgent('gemini-ha', '1.0.0', geminiHA, {
+      type: 'compound', provider: 'villa',
+      strengths: ['natural language home control', 'complex home automation', 'villa commands']
+    });
+    console.log('Registered: gemini-ha (Gemini NL + HA execution)');
+  }
+
   // Register tool-using Claude agent (Claude + HA tools + Crestron tools + utilities)
   if (AgentToolkit && ClaudeAPIAgent && process.env.ANTHROPIC_API_KEY) {
     const toolkit = new AgentToolkit();
@@ -304,6 +347,42 @@ Request: {task}`
           'status checks', 'natural language home control']
       });
       console.log(`Registered: claude-tools (${toolkit.size} tools: ${toolNames.join(', ')})`);
+    }
+  }
+
+  // Register tool-using Gemini agent (Gemini + HA tools + Crestron tools + utilities)
+  if (AgentToolkit && GeminiAgent && process.env.GEMINI_API_KEY) {
+    const gemToolkit = new AgentToolkit();
+    addUtilityTools(gemToolkit);
+
+    if (process.env.HA_TOKEN) {
+      addHATools(gemToolkit, {
+        baseUrl: process.env.HA_URL || 'http://192.168.1.6:8123',
+        token: process.env.HA_TOKEN
+      });
+    }
+
+    if (process.env.CRESTRON_AUTH_TOKEN) {
+      addCrestronTools(gemToolkit, {
+        host: process.env.CRESTRON_HOST || '192.168.1.2',
+        authToken: process.env.CRESTRON_AUTH_TOKEN
+      });
+    }
+
+    if (gemToolkit.size > 1) {
+      const geminiTools = new GeminiAgent({
+        systemPrompt: CLAUDE_TOOLS_PROMPT.replace('You are a Villa Romanza AI agent', 'You are a Villa Romanza Gemini AI agent'),
+        maxTokens: 8192,
+        toolkit: gemToolkit
+      });
+      const gemToolNames = gemToolkit.getDefinitions().map(t => t.name);
+      orc.registerAgent('gemini-tools', '1.0.0', geminiTools, {
+        type: 'cloud', provider: 'google',
+        strengths: ['complex reasoning', 'multi-step tasks', 'home automation',
+          'smart home', 'device control', 'shades', 'scenes', 'villa queries',
+          'status checks', 'natural language home control', 'long context', 'code generation']
+      });
+      console.log(`Registered: gemini-tools (${gemToolkit.size} tools: ${gemToolNames.join(', ')})`);
     }
   }
 
