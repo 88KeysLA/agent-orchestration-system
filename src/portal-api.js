@@ -86,6 +86,17 @@ async function proxyJSON(targetUrl, opts = {}) {
 
 function setupRoutes(app, orchestrator, { musicService, generationManager } = {}) {
 
+  // Debug: test HA connectivity from inside server process
+  app.get('/api/debug/ha', portalAuth, async (req, res) => {
+    try {
+      const r = await haFetch('/api/', { timeout: 5000 });
+      const text = await r.text();
+      res.json({ ok: r.ok, status: r.status, body: text.substring(0, 100) });
+    } catch (err) {
+      res.json({ error: err.message, code: err.code });
+    }
+  });
+
   // =========================================================================
   // Phase 1 — Core Portal
   // =========================================================================
