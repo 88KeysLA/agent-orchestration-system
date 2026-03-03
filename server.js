@@ -31,6 +31,8 @@ try { HAAgent = require('./src/agents/ha-agent'); } catch {}
 try { HAContextProvider = require('./src/ha-context-provider'); } catch {}
 let MoodOverrideDetector;
 try { MoodOverrideDetector = require('./src/mood-override-detector'); } catch {}
+let OpenAIAgent;
+try { OpenAIAgent = require('./src/agents/openai-agent'); } catch {}
 let AgentToolkit, addHATools, addCrestronTools, addUtilityTools;
 try { ({ AgentToolkit, addHATools, addCrestronTools, addUtilityTools } = require('./src/agent-tools')); } catch {}
 
@@ -187,6 +189,24 @@ async function main() {
     console.log('Registered: imagen (Google Imagen 4 + Gemini native image gen)');
   }
 
+  // Register ChatGPT agent if OpenAI API key available
+  if (OpenAIAgent && process.env.OPENAI_API_KEY) {
+    const chatgpt = new OpenAIAgent({
+      systemPrompt: VILLA_SYSTEM_PROMPT,
+      maxTokens: 4096
+    });
+    const healthy = await chatgpt.healthCheck();
+    if (healthy) {
+      orc.registerAgent('chatgpt', '1.0.0', chatgpt, {
+        type: 'cloud', provider: 'openai',
+        strengths: ['creative writing', 'conversation', 'general knowledge', 'voice scripts']
+      });
+      console.log('Registered: chatgpt (OpenAI API)');
+    } else {
+      console.log('Skipped: chatgpt (OpenAI API unreachable)');
+    }
+  }
+
   // Register Ollama agent if host is reachable
   if (OllamaAgent) {
     const ollamaHost = process.env.OLLAMA_HOST || 'http://192.168.0.60:11434';
@@ -330,8 +350,9 @@ Request: {task}`
     console.log('Registered: gemini-ha (Gemini NL + HA execution)');
   }
 
-  // Register tool-using Claude agent (Claude + HA tools + Crestron tools + utilities)
-  if (AgentToolkit && ClaudeAPIAgent && process.env.ANTHROPIC_API_KEY) {
+  // Build shared toolkit for tool-using agents (Claude + ChatGPT)
+  let sharedToolkit = null;
+  if (AgentToolkit) {
     const toolkit = new AgentToolkit();
     addUtilityTools(toolkit);
 
@@ -349,21 +370,39 @@ Request: {task}`
       });
     }
 
-    if (toolkit.size > 1) { // >1 means more than just utility tools
-      const claudeTools = new ClaudeAPIAgent({
-        systemPrompt: CLAUDE_TOOLS_PROMPT,
-        maxTokens: 4096,
-        toolkit
-      });
-      const toolNames = toolkit.getDefinitions().map(t => t.name);
-      orc.registerAgent('claude-tools', '1.0.0', claudeTools, {
-        type: 'cloud', provider: 'anthropic',
-        strengths: ['complex reasoning', 'multi-step tasks', 'home automation',
-          'smart home', 'device control', 'shades', 'scenes', 'villa queries',
-          'status checks', 'natural language home control']
-      });
-      console.log(`Registered: claude-tools (${toolkit.size} tools: ${toolNames.join(', ')})`);
-    }
+    if (toolkit.size > 1) sharedToolkit = toolkit; // >1 means more than just utility tools
+  }
+
+  // Register tool-using Claude agent
+  if (sharedToolkit && ClaudeAPIAgent && process.env.ANTHROPIC_API_KEY) {
+    const claudeTools = new ClaudeAPIAgent({
+      systemPrompt: CLAUDE_TOOLS_PROMPT,
+      maxTokens: 4096,
+      toolkit: sharedToolkit
+    });
+    const toolNames = sharedToolkit.getDefinitions().map(t => t.name);
+    orc.registerAgent('claude-tools', '1.0.0', claudeTools, {
+      type: 'cloud', provider: 'anthropic',
+      strengths: ['complex reasoning', 'multi-step tasks', 'home automation',
+        'smart home', 'device control', 'shades', 'scenes', 'villa queries',
+        'status checks', 'natural language home control']
+    });
+    console.log(`Registered: claude-tools (${sharedToolkit.size} tools: ${toolNames.join(', ')})`);
+  }
+
+  // Register tool-using ChatGPT agent
+  if (sharedToolkit && OpenAIAgent && process.env.OPENAI_API_KEY && orc.agents.has('chatgpt')) {
+    const chatgptTools = new OpenAIAgent({
+      systemPrompt: CLAUDE_TOOLS_PROMPT,
+      maxTokens: 4096,
+      toolkit: sharedToolkit
+    });
+    orc.registerAgent('chatgpt-tools', '1.0.0', chatgptTools, {
+      type: 'cloud', provider: 'openai',
+      strengths: ['creative home control', 'multi-step tasks', 'home automation',
+        'smart home', 'device control', 'shades', 'scenes', 'villa queries']
+    });
+    console.log(`Registered: chatgpt-tools (${sharedToolkit.size} tools)`);
   }
 
   // Register tool-using Gemini agent (Gemini + HA tools + Crestron tools + utilities)
