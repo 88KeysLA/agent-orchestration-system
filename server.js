@@ -27,6 +27,8 @@ try { HAAgent = require('./src/agents/ha-agent'); } catch {}
 try { HAContextProvider = require('./src/ha-context-provider'); } catch {}
 let MoodOverrideDetector;
 try { MoodOverrideDetector = require('./src/mood-override-detector'); } catch {}
+let AgentToolkit, addHATools, addCrestronTools, addUtilityTools;
+try { ({ AgentToolkit, addHATools, addCrestronTools, addUtilityTools } = require('./src/agent-tools')); } catch {}
 
 const HITL = require('./src/hitl');
 const { ContextManager, StaticProvider, TimeProvider } = require('./src/context-providers');
@@ -38,6 +40,24 @@ const VILLA_SYSTEM_PROMPT = `You are an AI agent in the Villa Romanza orchestrat
 Villa Romanza is a large-scale smart home with 76 areas across 5 floors.
 You assist with home automation, AV control, lighting, climate, and general tasks.
 Be concise and actionable. When referencing devices, use their Home Assistant entity IDs.`;
+
+const CLAUDE_TOOLS_PROMPT = `You are a Villa Romanza AI agent with direct control over the smart home.
+Villa Romanza is a large estate with 76 areas across 5 floors, managed by Crestron CP4-R and Home Assistant.
+
+You have tools to control Home Assistant entities and Crestron devices. Use them to fulfill requests.
+
+Safety rules:
+- NEVER control master suite lights (excluded from agent control)
+- NEVER control security, garage, or laundry devices (Hard Rule 4)
+- Media player volume NEVER exceeds 70%
+- Sensors are read-only
+- When unsure of an entity name, use ha_search_entities first
+
+Villa modes: NORMAL, LISTEN, LOOK, WATCH, ENTERTAIN, LIVE_JAM, SHOW, INTERLUDE
+Common HA rooms: theatre, bar, library, cabana, great_room, master, kitchen, north_hall
+
+Be concise. Use tools to check state before answering questions about the house.
+After controlling a device, briefly confirm what you did.`;
 
 async function main() {
   const port = parseInt(process.env.PORT) || 8406;
@@ -249,6 +269,42 @@ Request: {task}`
       strengths: ['natural language home control', 'complex home automation', 'villa commands']
     });
     console.log('Registered: claude-ha (Claude NL + HA execution)');
+  }
+
+  // Register tool-using Claude agent (Claude + HA tools + Crestron tools + utilities)
+  if (AgentToolkit && ClaudeAPIAgent && process.env.ANTHROPIC_API_KEY) {
+    const toolkit = new AgentToolkit();
+    addUtilityTools(toolkit);
+
+    if (process.env.HA_TOKEN) {
+      addHATools(toolkit, {
+        baseUrl: process.env.HA_URL || 'http://192.168.1.6:8123',
+        token: process.env.HA_TOKEN
+      });
+    }
+
+    if (process.env.CRESTRON_AUTH_TOKEN) {
+      addCrestronTools(toolkit, {
+        host: process.env.CRESTRON_HOST || '192.168.1.2',
+        authToken: process.env.CRESTRON_AUTH_TOKEN
+      });
+    }
+
+    if (toolkit.size > 1) { // >1 means more than just utility tools
+      const claudeTools = new ClaudeAPIAgent({
+        systemPrompt: CLAUDE_TOOLS_PROMPT,
+        maxTokens: 4096,
+        toolkit
+      });
+      const toolNames = toolkit.getDefinitions().map(t => t.name);
+      orc.registerAgent('claude-tools', '1.0.0', claudeTools, {
+        type: 'cloud', provider: 'anthropic',
+        strengths: ['complex reasoning', 'multi-step tasks', 'home automation',
+          'smart home', 'device control', 'shades', 'scenes', 'villa queries',
+          'status checks', 'natural language home control']
+      });
+      console.log(`Registered: claude-tools (${toolkit.size} tools: ${toolNames.join(', ')})`);
+    }
   }
 
   // Mood override detector — feeds RL with user correction data
