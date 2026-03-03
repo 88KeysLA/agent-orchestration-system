@@ -5,7 +5,12 @@
 #
 # Usage: ./test-all.sh [portal-url]
 
-set -euo pipefail
+set -uo pipefail
+
+# Ensure node is in PATH (Mech Mac installs to ~/local)
+for p in "$HOME/local/node-v22.15.0-darwin-arm64/bin" /usr/local/bin; do
+    [ -d "$p" ] && export PATH="$p:$PATH"
+done
 
 API_URL="${1:-http://localhost:8406}"
 TOKEN="${PORTAL_KEY:-ecef97cb7a41751dcb63c6bf1129f02e}"
