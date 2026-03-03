@@ -4,6 +4,14 @@
 const assert = require('assert');
 const path = require('path');
 const fs = require('fs');
+const Module = require('module');
+
+// Mock @google/genai before requiring the agent
+const MockAI = class { models = { generateImages: async () => ({ generatedImages: [] }), generateContent: async () => ({ text: '' }) }; };
+const origLoad = Module._load;
+Module._load = (req, ...args) =>
+  req === '@google/genai' ? { GoogleGenAI: MockAI } : origLoad(req, ...args);
+
 const ImagenAgent = require('../src/agents/imagen-agent');
 
 let passed = 0;

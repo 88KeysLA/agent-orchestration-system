@@ -2,6 +2,14 @@
  * Tests for GeminiAgent
  */
 const assert = require('assert');
+const Module = require('module');
+
+// Mock @google/generative-ai before requiring the agent
+const MockGenAI = class { getGenerativeModel() { return {}; } };
+const origLoad = Module._load;
+Module._load = (req, ...args) =>
+  req === '@google/generative-ai' ? { GoogleGenerativeAI: MockGenAI } : origLoad(req, ...args);
+
 const GeminiAgent = require('../src/agents/gemini-agent');
 
 let passed = 0;
