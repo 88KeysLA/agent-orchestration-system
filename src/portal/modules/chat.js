@@ -2,6 +2,7 @@
  * Villa Portal — Chat Module
  * Message bubbles, agent selector, WebSocket chat, localStorage history
  * Phase 2: Auto-speak (Edward TTS in browser via ElevenLabs)
+ * Phase 3: Mic input (Web Speech API for hands-free voice input)
  */
 (function () {
   'use strict';
@@ -15,6 +16,11 @@
   let pendingId = null;
   let autoSpeak = localStorage.getItem('villa_auto_speak') === 'true';
   let els = {};
+
+  // Speech recognition state
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isRecording = false;
 
   function loadHistory() {
     try {
@@ -123,6 +129,50 @@
     VP.sendWS({ type: 'set_auto_speak', enabled: autoSpeak });
   }
 
+  /** Initialize Web Speech API microphone */
+  function initMic() {
+    if (!SpeechRecognition) {
+      els.micBtn.style.display = 'none';
+      return;
+    }
+    recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (e) => {
+      const transcript = Array.from(e.results)
+        .map(r => r[0].transcript).join('');
+      els.input.value = transcript;
+      els.input.style.height = 'auto';
+      els.input.style.height = Math.min(els.input.scrollHeight, 120) + 'px';
+      els.sendBtn.disabled = !transcript.trim();
+      if (e.results[e.results.length - 1].isFinal) {
+        stopMic();
+        if (transcript.trim()) send();
+      }
+    };
+
+    recognition.onerror = () => { stopMic(); };
+    recognition.onend = () => { stopMic(); };
+  }
+
+  function toggleMic() {
+    if (isRecording) { stopMic(); return; }
+    isRecording = true;
+    els.micBtn.classList.add('recording');
+    els.input.placeholder = 'Listening...';
+    recognition.start();
+  }
+
+  function stopMic() {
+    if (!isRecording) return;
+    isRecording = false;
+    els.micBtn.classList.remove('recording');
+    els.input.placeholder = 'Talk to Villa Romanza...';
+    try { recognition.stop(); } catch {}
+  }
+
   function send() {
     const text = els.input.value.trim();
     if (!text || pendingId) return;
@@ -208,6 +258,7 @@
             ${AGENTS.map(a => `<option value="${a}">${a}</option>`).join('')}
           </select>
           <button class="chat-speak-btn${autoSpeak ? ' active' : ''}" id="chat-speak" title="${autoSpeak ? 'Edward is speaking (click to mute)' : 'Enable Edward voice'}">&#x1F50A;</button>
+          <button class="chat-mic-btn" id="chat-mic" title="Tap to talk">&#x1F3A4;</button>
           <textarea class="chat-input" id="chat-input" placeholder="Talk to Villa Romanza..." rows="1"></textarea>
           <button class="chat-send" id="chat-send" disabled>&#9654;</button>
         </div>
@@ -218,9 +269,14 @@
       els.sendBtn = document.getElementById('chat-send');
       els.agentSelect = document.getElementById('chat-agent');
       els.speakBtn = document.getElementById('chat-speak');
+      els.micBtn = document.getElementById('chat-mic');
 
       // Auto-speak toggle
       els.speakBtn.addEventListener('click', toggleAutoSpeak);
+
+      // Mic button
+      els.micBtn.addEventListener('click', toggleMic);
+      initMic();
 
       // Auto-resize textarea
       els.input.addEventListener('input', () => {
