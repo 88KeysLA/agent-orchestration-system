@@ -173,7 +173,7 @@ class SpotifyAdapter extends MusicAdapter {
   async search(query, opts = {}) {
     if (!query) return [];
 
-    const limit = opts.limit || 20;
+    const limit = Math.min(opts.limit || 10, 10);
     const type = opts.type || 'track,album,playlist';
 
     try {
