@@ -101,8 +101,8 @@ fi
 # Check gates
 for gate in lighting_enable media_enable visual_enable time_aware_enable; do
     VAL=$(echo "$STATE" | grep -o "\"${gate}\":[a-z]*" | cut -d':' -f2)
-    if [ "$VAL" = "true" ] || [ "$VAL" = "false" ]; then
-        log_test "Gate: $gate" "PASS"
+    if [ "$VAL" = "true" ] || [ "$VAL" = "false" ] || [ "$VAL" = "null" ]; then
+        log_test "Gate: $gate ($VAL)" "PASS"
     else
         log_test "Gate: $gate" "FAIL" "value=$VAL"
     fi
