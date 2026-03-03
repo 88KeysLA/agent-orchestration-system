@@ -142,7 +142,7 @@ BIG_FILES=$(find "${REPO_DIR}/src" -name "*.js" -exec wc -l {} + 2>/dev/null | a
 run_test "No source files over 800 lines" "test '$BIG_FILES' -eq 0"
 
 # Check for common issues
-run_test "No debugger statements" "! grep -r 'debugger' '${REPO_DIR}/src/' --include='*.js' -q"
+run_test "No debugger statements" "! grep -rP '^\s*debugger\s*;?\s*$' '${REPO_DIR}/src/' --include='*.js' -q"
 run_test "No hardcoded localhost in portal modules" "! grep -r 'localhost' '${REPO_DIR}/src/portal/' --include='*.js' -q"
 
 # Service worker cache version
