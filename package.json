@@ -29,9 +29,10 @@
     "test:ha-context": "node test/ha-context-provider.test.js",
     "test:mood-override": "node test/mood-override-detector.test.js",
     "test:agent-tools": "node test/agent-tools.test.js",
-    "test:all": "node test/message-bus.test.js && node test/saga.test.js && node test/event-store.test.js && node test/registry.test.js && node test/health-monitor.test.js && node test/explainer.test.js && node test/replanner.test.js && node test/orchestrator.test.js && node test/multi-objective-reward.test.js && node test/agents.test.js && node test/api.test.js && node test/rag-agent.test.js && node test/rl-persistence.test.js && node test/strength-routing.test.js && node test/compound-agent.test.js && node test/redis-bus.test.js && node test/remote-agent.test.js && node test/composer.test.js && node test/hitl.test.js && node test/marketplace.test.js && node test/tenancy.test.js && node test/context-providers.test.js && node test/plugin-loader.test.js && node test/ha-agent.test.js && node test/ha-context-provider.test.js && node test/mood-override-detector.test.js && node test/agent-tools.test.js && node test/gemini-agent.test.js",
+    "test:all": "node test/message-bus.test.js && node test/saga.test.js && node test/event-store.test.js && node test/registry.test.js && node test/health-monitor.test.js && node test/explainer.test.js && node test/replanner.test.js && node test/orchestrator.test.js && node test/multi-objective-reward.test.js && node test/agents.test.js && node test/api.test.js && node test/rag-agent.test.js && node test/rl-persistence.test.js && node test/strength-routing.test.js && node test/compound-agent.test.js && node test/redis-bus.test.js && node test/remote-agent.test.js && node test/composer.test.js && node test/hitl.test.js && node test/marketplace.test.js && node test/tenancy.test.js && node test/context-providers.test.js && node test/plugin-loader.test.js && node test/ha-agent.test.js && node test/ha-context-provider.test.js && node test/mood-override-detector.test.js && node test/agent-tools.test.js && node test/gemini-agent.test.js && node test/imagen-agent.test.js",
     "bootstrap": "node bootstrap.js",
-    "test:gemini": "node test/gemini-agent.test.js"
+    "test:gemini": "node test/gemini-agent.test.js",
+    "test:imagen": "node test/imagen-agent.test.js"
   },
   "keywords": [
     "agents",
@@ -46,6 +47,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@google/genai": "^1.43.0",
     "@google/generative-ai": "^0.24.1",
     "express": "^5.2.1",
     "ioredis": "^5.10.0"

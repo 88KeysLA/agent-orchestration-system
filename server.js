@@ -20,6 +20,8 @@ let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus, RemoteAgent,
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
 let GeminiAgent;
 try { GeminiAgent = require("./src/agents/gemini-agent"); } catch {}
+let ImagenAgent;
+try { ImagenAgent = require("./src/agents/imagen-agent"); } catch {}
 try { OllamaAgent = require('./src/agents/ollama-agent'); } catch {}
 try { RAGAgent = require('./src/agents/rag-agent'); } catch {}
 try { CompoundAgent = require('./src/agents/compound-agent'); } catch {}
@@ -169,6 +171,20 @@ async function main() {
       strengths: ['long context', 'code generation', 'analysis', 'multimodal', 'app development']
     });
     console.log('Registered: gemini (Google Gemini API)');
+  }
+
+  // Register Imagen agent if Gemini API key available
+  if (ImagenAgent && process.env.GEMINI_API_KEY) {
+    const imagen = new ImagenAgent({
+      outputDir: require('path').join(process.env.HOME || '/tmp', 'generated-images'),
+      aspectRatio: '16:9'
+    });
+    orc.registerAgent('imagen', '1.0.0', imagen, {
+      type: 'cloud', provider: 'google',
+      strengths: ['image generation', 'visual art', 'creative', 'design',
+        'illustration', 'photo', 'picture', 'draw', 'paint', 'render']
+    });
+    console.log('Registered: imagen (Google Imagen 4 + Gemini native image gen)');
   }
 
   // Register Ollama agent if host is reachable
