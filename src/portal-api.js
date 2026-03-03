@@ -416,35 +416,25 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
   });
 
   // GET /api/music/sonos/speakers — List Sonos speakers from HA
+  // Uses HA template API to filter server-side (avoids 2.5MB /api/states download)
   app.get('/api/music/sonos/speakers', portalAuth, async (req, res) => {
     if (!HA_TOKEN) return res.json({ speakers: [] });
     try {
-      const r = await fetch(`${HA_URL}/api/states`, {
-        headers: { 'Authorization': `Bearer ${HA_TOKEN}` },
-        signal: AbortSignal.timeout(10000),
+      const template = `[{% for s in states.media_player | selectattr('attributes.friendly_name', 'defined') | rejectattr('entity_id', 'search', 'tv|avr|apple_tv|xbox|lg_') %}{"entityId":"{{ s.entity_id }}","name":"{{ s.attributes.friendly_name | replace('"','\\\\"') }}","state":"{{ s.state }}","volume":{{ s.attributes.volume_level | default(0) }},"mediaTitle":"{{ s.attributes.media_title | default('') | replace('"','\\\\"') }}","mediaArtist":"{{ s.attributes.media_artist | default('') | replace('"','\\\\"') }}"}{{ "," if not loop.last }}{% endfor %}]`;
+
+      const r = await fetch(`${HA_URL}/api/template`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HA_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ template }),
+        signal: AbortSignal.timeout(15000),
       });
+
       if (!r.ok) return res.json({ speakers: [] });
-      const states = await r.json();
-      const speakers = states
-        .filter(s => s.entity_id.startsWith('media_player.') && s.attributes?.friendly_name &&
-          (s.attributes?.supported_features || 0) > 0)
-        .filter(s => {
-          const name = s.entity_id.toLowerCase();
-          // Filter to likely Sonos entities (exclude TVs, AVRs, Apple TVs)
-          return !name.includes('tv_') && !name.includes('_tv') &&
-                 !name.includes('avr') && !name.includes('apple_tv') &&
-                 !name.includes('xbox') && !name.includes('lg_');
-        })
-        .map(s => ({
-          entityId: s.entity_id,
-          name: s.attributes.friendly_name,
-          state: s.state,
-          volume: s.attributes.volume_level,
-          mediaTitle: s.attributes.media_title || null,
-          mediaArtist: s.attributes.media_artist || null,
-          mediaAlbum: s.attributes.media_album_name || null,
-          entityPicture: s.attributes.entity_picture || null,
-        }))
+      const text = await r.text();
+      const speakers = JSON.parse(text)
         .sort((a, b) => a.name.localeCompare(b.name));
 
       res.json({ speakers });
@@ -690,46 +680,33 @@ function setupWebSocket(httpServer, orchestrator, demo, { generationManager } = 
   }
 
   // Now-playing poller — broadcast track changes to all clients
+  // Uses HA template API to get only the first playing media_player (avoids 2.5MB states fetch)
   let lastNowPlaying = '';
   if (HA_TOKEN) {
+    const npTemplate = `{% set p = states.media_player | selectattr('state', 'eq', 'playing') | rejectattr('entity_id', 'search', 'tv|avr|apple_tv|xbox') | first %}{% if p %}{"entityId":"{{ p.entity_id }}","name":"{{ p.attributes.friendly_name | default('') | replace('"','\\\\"') }}","title":"{{ p.attributes.media_title | default('') | replace('"','\\\\"') }}","artist":"{{ p.attributes.media_artist | default('') | replace('"','\\\\"') }}","album":"{{ p.attributes.media_album_name | default('') | replace('"','\\\\"') }}","albumArt":"{% if p.attributes.entity_picture %}${HA_URL}{{ p.attributes.entity_picture }}{% endif %}","state":"{{ p.state }}","volume":{{ p.attributes.volume_level | default(0) }}}{% endif %}`;
+
     const pollSpeaker = async () => {
+      if (wss.clients.size === 0) return; // Skip if nobody listening
       try {
-        // Get first active Sonos speaker
-        const r = await fetch(`${HA_URL}/api/states`, {
-          headers: { 'Authorization': `Bearer ${HA_TOKEN}` },
+        const r = await fetch(`${HA_URL}/api/template`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${HA_TOKEN}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ template: npTemplate }),
           signal: AbortSignal.timeout(5000),
         });
         if (!r.ok) return;
-        const states = await r.json();
-        const playing = states.find(s =>
-          s.entity_id.startsWith('media_player.') &&
-          s.state === 'playing' &&
-          s.attributes?.media_title &&
-          !s.entity_id.includes('tv') &&
-          !s.entity_id.includes('avr') &&
-          !s.entity_id.includes('apple_tv')
-        );
+        const text = (await r.text()).trim();
+        if (!text) return;
 
-        if (!playing) return;
-
-        const key = `${playing.entity_id}:${playing.attributes.media_title}:${playing.attributes.media_artist}`;
+        const playing = JSON.parse(text);
+        const key = `${playing.entityId}:${playing.title}:${playing.artist}`;
         if (key === lastNowPlaying) return;
         lastNowPlaying = key;
 
-        const msg = JSON.stringify({
-          type: 'now_playing',
-          entityId: playing.entity_id,
-          name: playing.attributes.friendly_name,
-          title: playing.attributes.media_title,
-          artist: playing.attributes.media_artist || '',
-          album: playing.attributes.media_album_name || '',
-          albumArt: playing.attributes.entity_picture
-            ? `${HA_URL}${playing.attributes.entity_picture}`
-            : null,
-          state: playing.state,
-          volume: playing.attributes.volume_level,
-        });
-
+        const msg = JSON.stringify({ type: 'now_playing', ...playing });
         for (const client of wss.clients) {
           if (client.readyState === WebSocket.OPEN) client.send(msg);
         }
