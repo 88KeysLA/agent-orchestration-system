@@ -9,40 +9,48 @@
  */
 const path = require('path');
 const fs = require('fs');
-const http = require('http');
 const express = require('express');
 const { DemoEngine } = require('./demo-engine');
 
 /**
- * HA API helper using Node http module (avoids undici EHOSTUNREACH on multi-homed hosts)
+ * HA API helper using curl subprocess.
+ * macOS Local Network Privacy blocks nohup'd Node.js processes from reaching
+ * cross-subnet devices (EHOSTUNREACH). curl has the permission, so we shell out.
  */
+const { execFile } = require('child_process');
+
 function haFetch(urlPath, { method = 'GET', body, timeout = 15000 } = {}) {
   const haUrl = process.env.HA_URL || 'http://192.168.1.6:8123';
   const haToken = process.env.HA_TOKEN || '';
-  const url = new URL(urlPath, haUrl);
+  const url = `${haUrl}${urlPath}`;
+  const timeoutSec = Math.ceil(timeout / 1000);
+
+  const args = [
+    '-s', '-w', '\n%{http_code}',
+    '--max-time', String(timeoutSec),
+    '-H', `Authorization: Bearer ${haToken}`,
+  ];
+
+  if (method !== 'GET') args.push('-X', method);
+  if (body) {
+    args.push('-H', 'Content-Type: application/json');
+    args.push('-d', JSON.stringify(body));
+  }
+  args.push(url);
 
   return new Promise((resolve, reject) => {
-    const reqBody = body ? JSON.stringify(body) : null;
-    const req = http.request({
-      hostname: url.hostname,
-      port: url.port,
-      path: url.pathname,
-      method,
-      headers: {
-        'Authorization': `Bearer ${haToken}`,
-        ...(reqBody ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) } : {}),
-      },
-      timeout,
-      family: 4, // Force IPv4
-    }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('end', () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, text: () => Promise.resolve(data), json: () => Promise.resolve(JSON.parse(data)) }));
+    execFile('curl', args, { timeout: timeout + 2000, encoding: 'utf-8' }, (err, stdout) => {
+      if (err) return reject(new Error(`HA curl failed: ${err.message.substring(0, 200)}`));
+      const lines = stdout.trimEnd().split('\n');
+      const statusCode = parseInt(lines.pop(), 10);
+      const data = lines.join('\n');
+      resolve({
+        ok: statusCode >= 200 && statusCode < 300,
+        status: statusCode,
+        text: () => Promise.resolve(data),
+        json: () => Promise.resolve(JSON.parse(data)),
+      });
     });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('HA request timeout')); });
-    if (reqBody) req.write(reqBody);
-    req.end();
   });
 }
 
