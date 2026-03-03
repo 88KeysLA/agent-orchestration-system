@@ -61,8 +61,6 @@ const MUSIC_URL = 'http://192.168.0.60:8404';
 const SHOW_URL = 'http://192.168.0.62:8403';
 const HA_URL = process.env.HA_URL || 'http://192.168.1.6:8123';
 const HA_TOKEN = process.env.HA_TOKEN || '';
-if (HA_TOKEN) console.log(`[Portal] HA configured: ${HA_URL} (token ${HA_TOKEN.substring(0, 20)}...)`);
-else console.log('[Portal] WARNING: HA_TOKEN not set');
 
 // ElevenLabs config for browser TTS (Edward = default butler)
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
@@ -93,17 +91,6 @@ async function proxyJSON(targetUrl, opts = {}) {
 }
 
 function setupRoutes(app, orchestrator, { musicService, generationManager } = {}) {
-
-  // Debug: test HA connectivity from inside server process
-  app.get('/api/debug/ha', portalAuth, async (req, res) => {
-    try {
-      const r = await haFetch('/api/', { timeout: 5000 });
-      const text = await r.text();
-      res.json({ ok: r.ok, status: r.status, body: text.substring(0, 100) });
-    } catch (err) {
-      res.json({ error: err.message, code: err.code });
-    }
-  });
 
   // =========================================================================
   // Phase 1 — Core Portal
@@ -479,7 +466,6 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
 
       res.json({ speakers });
     } catch (err) {
-      console.error('[Speakers] fetch error:', err.message, err.cause || '');
       res.json({ speakers: [], error: err.message });
     }
   });
