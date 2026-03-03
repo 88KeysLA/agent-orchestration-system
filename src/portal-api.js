@@ -420,7 +420,7 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
   app.get('/api/music/sonos/speakers', portalAuth, async (req, res) => {
     if (!HA_TOKEN) return res.json({ speakers: [] });
     try {
-      const template = `[{% for s in states.media_player | selectattr('attributes.friendly_name', 'defined') | rejectattr('entity_id', 'search', 'tv|avr|apple_tv|xbox|lg_') %}{"entityId":"{{ s.entity_id }}","name":"{{ s.attributes.friendly_name | replace('"','\\\\"') }}","state":"{{ s.state }}","volume":{{ s.attributes.volume_level | default(0) }},"mediaTitle":"{{ s.attributes.media_title | default('') | replace('"','\\\\"') }}","mediaArtist":"{{ s.attributes.media_artist | default('') | replace('"','\\\\"') }}"}{{ "," if not loop.last }}{% endfor %}]`;
+      const template = `[{% for s in states.media_player if 'tv' not in s.entity_id and 'avr' not in s.entity_id and 'apple_tv' not in s.entity_id and 'xbox' not in s.entity_id and s.attributes.friendly_name is defined %}{"entityId":"{{ s.entity_id }}","name":"{{ s.attributes.friendly_name }}","state":"{{ s.state }}","volume":{{ s.attributes.volume_level | default(0) }},"mediaTitle":"{{ s.attributes.media_title | default('') }}","mediaArtist":"{{ s.attributes.media_artist | default('') }}"}{{ "," if not loop.last }}{% endfor %}]`;
 
       const r = await fetch(`${HA_URL}/api/template`, {
         method: 'POST',
@@ -683,7 +683,7 @@ function setupWebSocket(httpServer, orchestrator, demo, { generationManager } = 
   // Uses HA template API to get only the first playing media_player (avoids 2.5MB states fetch)
   let lastNowPlaying = '';
   if (HA_TOKEN) {
-    const npTemplate = `{% set p = states.media_player | selectattr('state', 'eq', 'playing') | rejectattr('entity_id', 'search', 'tv|avr|apple_tv|xbox') | first %}{% if p %}{"entityId":"{{ p.entity_id }}","name":"{{ p.attributes.friendly_name | default('') | replace('"','\\\\"') }}","title":"{{ p.attributes.media_title | default('') | replace('"','\\\\"') }}","artist":"{{ p.attributes.media_artist | default('') | replace('"','\\\\"') }}","album":"{{ p.attributes.media_album_name | default('') | replace('"','\\\\"') }}","albumArt":"{% if p.attributes.entity_picture %}${HA_URL}{{ p.attributes.entity_picture }}{% endif %}","state":"{{ p.state }}","volume":{{ p.attributes.volume_level | default(0) }}}{% endif %}`;
+    const npTemplate = `{% set ns = namespace(found=none) %}{% for s in states.media_player if s.state == 'playing' and 'tv' not in s.entity_id and 'avr' not in s.entity_id and 'apple_tv' not in s.entity_id and 'xbox' not in s.entity_id and ns.found is none %}{% set ns.found = s %}{% endfor %}{% if ns.found %}{% set p = ns.found %}{"entityId":"{{ p.entity_id }}","name":"{{ p.attributes.friendly_name | default('') }}","title":"{{ p.attributes.media_title | default('') }}","artist":"{{ p.attributes.media_artist | default('') }}","album":"{{ p.attributes.media_album_name | default('') }}","albumArt":"{% if p.attributes.entity_picture %}${HA_URL}{{ p.attributes.entity_picture }}{% endif %}","state":"{{ p.state }}","volume":{{ p.attributes.volume_level | default(0) }}}{% endif %}`;
 
     const pollSpeaker = async () => {
       if (wss.clients.size === 0) return; // Skip if nobody listening
