@@ -9,8 +9,42 @@
  */
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const express = require('express');
 const { DemoEngine } = require('./demo-engine');
+
+/**
+ * HA API helper using Node http module (avoids undici EHOSTUNREACH on multi-homed hosts)
+ */
+function haFetch(urlPath, { method = 'GET', body, timeout = 15000 } = {}) {
+  const haUrl = process.env.HA_URL || 'http://192.168.1.6:8123';
+  const haToken = process.env.HA_TOKEN || '';
+  const url = new URL(urlPath, haUrl);
+
+  return new Promise((resolve, reject) => {
+    const reqBody = body ? JSON.stringify(body) : null;
+    const req = http.request({
+      hostname: url.hostname,
+      port: url.port,
+      path: url.pathname,
+      method,
+      headers: {
+        'Authorization': `Bearer ${haToken}`,
+        ...(reqBody ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) } : {}),
+      },
+      timeout,
+      family: 4, // Force IPv4
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, text: () => Promise.resolve(data), json: () => Promise.resolve(JSON.parse(data)) }));
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('HA request timeout')); });
+    if (reqBody) req.write(reqBody);
+    req.end();
+  });
+}
 
 const IMAGES_DIR = path.join(process.env.HOME || '/tmp', 'generated-images');
 const MUSIC_DIR = process.env.MUSIC_DIR || path.join(process.env.HOME || '/tmp', 'generated-music');
@@ -396,15 +430,8 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
         };
       }
 
-      const r = await fetch(haUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${HA_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(haBody),
-        signal: AbortSignal.timeout(10000),
-      });
+      const haPath = haUrl.replace(HA_URL, '');
+      const r = await haFetch(haPath, { method: 'POST', body: haBody, timeout: 10000 });
 
       if (!r.ok) {
         const text = await r.text();
@@ -424,15 +451,7 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     try {
       const template = `[{% for s in states.media_player if 'tv' not in s.entity_id and 'avr' not in s.entity_id and 'apple_tv' not in s.entity_id and 'xbox' not in s.entity_id and s.attributes.friendly_name is defined %}{"entityId":"{{ s.entity_id }}","name":"{{ s.attributes.friendly_name }}","state":"{{ s.state }}","volume":{{ s.attributes.volume_level | default(0) }},"mediaTitle":"{{ s.attributes.media_title | default('') }}","mediaArtist":"{{ s.attributes.media_artist | default('') }}"}{{ "," if not loop.last }}{% endfor %}]`;
 
-      const r = await fetch(`${HA_URL}/api/template`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${HA_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ template }),
-        signal: AbortSignal.timeout(15000),
-      });
+      const r = await haFetch('/api/template', { method: 'POST', body: { template } });
 
       if (!r.ok) return res.json({ speakers: [] });
       const text = await r.text();
@@ -451,10 +470,7 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     if (!HA_TOKEN) return res.json({ error: 'HA not configured' });
     try {
       const entityId = req.params.entityId;
-      const r = await fetch(`${HA_URL}/api/states/${entityId}`, {
-        headers: { 'Authorization': `Bearer ${HA_TOKEN}` },
-        signal: AbortSignal.timeout(5000),
-      });
+      const r = await haFetch(`/api/states/${entityId}`, { timeout: 5000 });
       if (!r.ok) return res.status(r.status).json({ error: 'Entity not found' });
       const state = await r.json();
       res.json({
@@ -516,18 +532,10 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
       const audioUrl = `${proto}://${host}/api/music/audio/${encodeURIComponent(filename)}`;
       const contentId = `x-rincon-mp3radio://${audioUrl.replace(/^https?:\/\//, '')}`;
 
-      const r = await fetch(`${HA_URL}/api/services/media_player/play_media`, {
+      const r = await haFetch('/api/services/media_player/play_media', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${HA_TOKEN}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          entity_id: entityId,
-          media_content_type: 'music',
-          media_content_id: contentId,
-        }),
-        signal: AbortSignal.timeout(10000),
+        body: { entity_id: entityId, media_content_type: 'music', media_content_id: contentId },
+        timeout: 10000,
       });
 
       if (!r.ok) {
@@ -691,15 +699,7 @@ function setupWebSocket(httpServer, orchestrator, demo, { generationManager } = 
     const pollSpeaker = async () => {
       if (wss.clients.size === 0) return; // Skip if nobody listening
       try {
-        const r = await fetch(`${HA_URL}/api/template`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${HA_TOKEN}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ template: npTemplate }),
-          signal: AbortSignal.timeout(5000),
-        });
+        const r = await haFetch('/api/template', { method: 'POST', body: { template: npTemplate }, timeout: 5000 });
         if (!r.ok) return;
         const text = (await r.text()).trim();
         if (!text) return;
