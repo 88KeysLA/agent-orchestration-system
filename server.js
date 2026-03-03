@@ -12,9 +12,11 @@
  *   - Mock fallback if nothing else available
  */
 const path = require('path');
+const express = require('express');
 const Orchestrator = require('./src/orchestrator');
 const MultiObjectiveReward = require('./src/multi-objective-reward');
 const createAPI = require('./src/api');
+const { setupRoutes: setupPortal, setupWebSocket } = require('./src/portal-api');
 
 let ClaudeAPIAgent, OllamaAgent, RAGAgent, CompoundAgent, RedisBus, RemoteAgent, HAAgent, HAContextProvider;
 try { ClaudeAPIAgent = require('./src/agents/claude-agent'); } catch {}
@@ -482,25 +484,33 @@ Request: {task}`
     console.log('Registered: mock (fallback)');
   }
 
-  const app = createAPI(orc);
+  // Create parent Express app with portal, then mount API sub-app
+  const apiApp = createAPI(orc);
+  const app = express();
+  app.use(express.json());
+  setupPortal(app, orc);   // Portal routes first (GET / serves portal)
+  app.use(apiApp);          // API sub-app (existing routes preserved)
 
   const server = app.listen(port, () => {
     console.log(`\nVilla Romanza Agent Orchestration API on port ${port}`);
+    console.log(`Portal: http://localhost:${port}/`);
     console.log(`Agents: ${Array.from(orc.agents.keys()).join(', ')}`);
     console.log(`\nEndpoints:`);
-    console.log(`  POST /api/tasks       - Execute a task`);
-    console.log(`  POST /api/workflows   - Execute a workflow`);
-    console.log(`  GET  /api/status      - System status`);
-    console.log(`  GET  /api/agents      - List agents`);
-    console.log(`  GET  /api/events      - Event history`);
-    console.log(`  GET  /api/tasks/:id   - Get task result`);
-    console.log(`  POST /api/tasks/:id/feedback - Submit feedback`);
-    console.log(`  GET  /api/decisions   - Decision history`);
-    console.log(`  GET  /api/rl-stats    - RL learning state`);
+    console.log(`  GET  /                - Villa Portal`);
+    console.log(`  WS   /ws             - WebSocket (chat + events)`);
+    console.log(`  POST /api/chat       - Chat with agents`);
+    console.log(`  POST /api/tasks      - Execute a task`);
+    console.log(`  GET  /api/villa/state - Villa state`);
+    console.log(`  GET  /api/images     - Generated images`);
+    console.log(`  GET  /api/agents     - List agents`);
+    console.log(`  GET  /api/rl-stats   - RL learning state`);
   });
+
+  const wss = setupWebSocket(server, orc);
 
   const shutdown = async () => {
     orc.shutdown();
+    if (wss) wss.close();
     if (redisBus) await redisBus.disconnect().catch(() => {});
     server.close();
     process.exit(0);

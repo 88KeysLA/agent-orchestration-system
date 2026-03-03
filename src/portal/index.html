@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Villa Romanza</title>
+  <link rel="stylesheet" href="/portal/style.css">
+  <link rel="manifest" href="/portal/manifest.json">
+  <meta name="theme-color" content="#0a0a1a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+  <!-- Login -->
+  <div id="login-overlay">
+    <div class="login-card">
+      <h1>Villa Romanza</h1>
+      <p class="login-sub">Remote Command Center</p>
+      <form id="login-form">
+        <input type="password" id="login-key" placeholder="Portal key" autocomplete="current-password">
+        <button type="submit">Enter</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="app" class="hidden">
+    <nav id="nav">
+      <div class="nav-brand">Villa Romanza</div>
+      <div class="nav-tabs">
+        <button class="nav-tab active" data-panel="chat">Chat</button>
+        <button class="nav-tab" data-panel="dashboard">Dashboard</button>
+        <button class="nav-tab" data-panel="visual">Visual</button>
+        <button class="nav-tab" data-panel="music">Music</button>
+        <button class="nav-tab" data-panel="audio">Audio</button>
+        <button class="nav-tab" data-panel="images">Images</button>
+      </div>
+      <div class="nav-status">
+        <span id="ws-status" class="status-dot"></span>
+        <span id="mode-badge">--</span>
+      </div>
+    </nav>
+
+    <main id="main">
+      <section id="panel-chat" class="panel active"></section>
+      <section id="panel-dashboard" class="panel"></section>
+      <section id="panel-visual" class="panel"></section>
+      <section id="panel-music" class="panel"></section>
+      <section id="panel-audio" class="panel"></section>
+      <section id="panel-images" class="panel"></section>
+    </main>
+  </div>
+
+  <script src="/portal/app.js"></script>
+  <script src="/portal/modules/chat.js"></script>
+  <script src="/portal/modules/dashboard.js"></script>
+  <script src="/portal/modules/visual.js"></script>
+  <script src="/portal/modules/music.js"></script>
+  <script src="/portal/modules/audio-viz.js"></script>
+  <script src="/portal/modules/images.js"></script>
+</body>
+</html>

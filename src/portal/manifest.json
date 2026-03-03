@@ -1,0 +1,10 @@
+{
+  "name": "Villa Romanza Portal",
+  "short_name": "Villa",
+  "description": "Remote Command Center for Villa Romanza",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a1a",
+  "theme_color": "#0a0a1a",
+  "orientation": "any"
+}
