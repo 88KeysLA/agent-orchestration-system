@@ -4,15 +4,21 @@
  *
  * Phase 1: Chat, images, villa state, mode control
  * Phase 2: TTS (browser audio), visual stream proxy, music director proxy
+ * Phase 3: Demo sequences
+ * Phase 4: Music Platform (unified search, Sonos playback, AI generation)
  */
 const path = require('path');
 const fs = require('fs');
 const express = require('express');
+const { DemoEngine } = require('./demo-engine');
 
 const IMAGES_DIR = path.join(process.env.HOME || '/tmp', 'generated-images');
+const MUSIC_DIR = process.env.MUSIC_DIR || path.join(process.env.HOME || '/tmp', 'generated-music');
 const VOICE_URL = 'http://192.168.0.60:8405';
 const MUSIC_URL = 'http://192.168.0.60:8404';
 const SHOW_URL = 'http://192.168.0.62:8403';
+const HA_URL = process.env.HA_URL || 'http://192.168.1.6:8123';
+const HA_TOKEN = process.env.HA_TOKEN || '';
 
 // ElevenLabs config for browser TTS (Edward = default butler)
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY || '';
@@ -42,7 +48,7 @@ async function proxyJSON(targetUrl, opts = {}) {
   return { status: r.status, data: await r.json() };
 }
 
-function setupRoutes(app, orchestrator) {
+function setupRoutes(app, orchestrator, { musicService, generationManager } = {}) {
 
   // =========================================================================
   // Phase 1 — Core Portal
@@ -330,13 +336,292 @@ function setupRoutes(app, orchestrator) {
       res.status(502).json({ error: `Music Director unreachable: ${err.message}` });
     }
   });
+
+  // =========================================================================
+  // Phase 4 — Music Platform (Unified Search, Sonos Playback, AI Generation)
+  // =========================================================================
+
+  // GET /api/music/services — Available music services
+  app.get('/api/music/services', portalAuth, (req, res) => {
+    if (!musicService) return res.json({ services: [] });
+    res.json(musicService.getAvailableServices());
+  });
+
+  // GET /api/music/search — Unified music search
+  app.get('/api/music/search', portalAuth, async (req, res) => {
+    if (!musicService) return res.json({ results: {}, errors: { system: 'Music service not configured' } });
+    try {
+      const { q, service, limit } = req.query;
+      if (!q) return res.status(400).json({ error: 'q (query) required' });
+      const opts = { limit: parseInt(limit) || 20 };
+
+      if (service && service !== 'all') {
+        const result = await musicService.search(service, q, opts);
+        res.json({ results: { [result.service]: result.results }, errors: {} });
+      } else {
+        const result = await musicService.searchAll(q, opts);
+        res.json(result);
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/music/sonos/play — Play on Sonos via HA
+  // Supports: media playback, transport commands (_service_call), volume (_volume)
+  app.post('/api/music/sonos/play', portalAuth, async (req, res) => {
+    if (!HA_TOKEN) return res.status(503).json({ error: 'HA token not configured' });
+    try {
+      const { entityId, contentType, contentId } = req.body;
+      if (!entityId) return res.status(400).json({ error: 'entityId required' });
+
+      let haUrl, haBody;
+
+      if (contentType === '_service_call') {
+        // Transport commands: media_player/media_play_pause, etc.
+        haUrl = `${HA_URL}/api/services/${contentId}`;
+        haBody = { entity_id: entityId };
+      } else if (contentType === '_volume') {
+        haUrl = `${HA_URL}/api/services/media_player/volume_set`;
+        haBody = { entity_id: entityId, volume_level: parseFloat(contentId) };
+      } else {
+        if (!contentId) return res.status(400).json({ error: 'contentId required' });
+        haUrl = `${HA_URL}/api/services/media_player/play_media`;
+        haBody = {
+          entity_id: entityId,
+          media_content_type: contentType || 'music',
+          media_content_id: contentId,
+        };
+      }
+
+      const r = await fetch(haUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HA_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(haBody),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!r.ok) {
+        const text = await r.text();
+        return res.status(r.status).json({ error: `HA error: ${text.substring(0, 200)}` });
+      }
+
+      res.json({ success: true, entityId });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/music/sonos/speakers — List Sonos speakers from HA
+  app.get('/api/music/sonos/speakers', portalAuth, async (req, res) => {
+    if (!HA_TOKEN) return res.json({ speakers: [] });
+    try {
+      const r = await fetch(`${HA_URL}/api/states`, {
+        headers: { 'Authorization': `Bearer ${HA_TOKEN}` },
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!r.ok) return res.json({ speakers: [] });
+      const states = await r.json();
+      const speakers = states
+        .filter(s => s.entity_id.startsWith('media_player.') && s.attributes?.friendly_name &&
+          (s.attributes?.supported_features || 0) > 0)
+        .filter(s => {
+          const name = s.entity_id.toLowerCase();
+          // Filter to likely Sonos entities (exclude TVs, AVRs, Apple TVs)
+          return !name.includes('tv_') && !name.includes('_tv') &&
+                 !name.includes('avr') && !name.includes('apple_tv') &&
+                 !name.includes('xbox') && !name.includes('lg_');
+        })
+        .map(s => ({
+          entityId: s.entity_id,
+          name: s.attributes.friendly_name,
+          state: s.state,
+          volume: s.attributes.volume_level,
+          mediaTitle: s.attributes.media_title || null,
+          mediaArtist: s.attributes.media_artist || null,
+          mediaAlbum: s.attributes.media_album_name || null,
+          entityPicture: s.attributes.entity_picture || null,
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+
+      res.json({ speakers });
+    } catch (err) {
+      res.json({ speakers: [], error: err.message });
+    }
+  });
+
+  // GET /api/music/sonos/now-playing/:entityId — Now playing for a specific speaker
+  app.get('/api/music/sonos/now-playing/:entityId', portalAuth, async (req, res) => {
+    if (!HA_TOKEN) return res.json({ error: 'HA not configured' });
+    try {
+      const entityId = req.params.entityId;
+      const r = await fetch(`${HA_URL}/api/states/${entityId}`, {
+        headers: { 'Authorization': `Bearer ${HA_TOKEN}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!r.ok) return res.status(r.status).json({ error: 'Entity not found' });
+      const state = await r.json();
+      res.json({
+        entityId: state.entity_id,
+        state: state.state,
+        title: state.attributes.media_title || null,
+        artist: state.attributes.media_artist || null,
+        album: state.attributes.media_album_name || null,
+        albumArt: state.attributes.entity_picture
+          ? `${HA_URL}${state.attributes.entity_picture}`
+          : null,
+        volume: state.attributes.volume_level,
+        duration: state.attributes.media_duration || null,
+        position: state.attributes.media_position || null,
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // --- AI Music Generation ---
+
+  // POST /api/music/generate — Start AI generation job
+  app.post('/api/music/generate', portalAuth, async (req, res) => {
+    if (!generationManager) return res.status(503).json({ error: 'Generation not configured' });
+    try {
+      const { service, prompt, style, duration, instrumental } = req.body;
+      if (!service || !prompt) return res.status(400).json({ error: 'service and prompt required' });
+      const result = await generationManager.startGeneration(service, prompt, { style, duration, instrumental });
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/music/generate/:jobId — Poll generation job status
+  app.get('/api/music/generate/:jobId', portalAuth, (req, res) => {
+    if (!generationManager) return res.status(503).json({ error: 'Generation not configured' });
+    const job = generationManager.getJob(req.params.jobId);
+    if (!job) return res.status(404).json({ error: 'Job not found' });
+    res.json(job);
+  });
+
+  // GET /api/music/generated — List all generated tracks
+  app.get('/api/music/generated', portalAuth, (req, res) => {
+    if (!generationManager) return res.json({ tracks: [] });
+    res.json({ tracks: generationManager.getGeneratedTracks() });
+  });
+
+  // POST /api/music/generated/:id/play — Play generated track on Sonos
+  app.post('/api/music/generated/:id/play', portalAuth, async (req, res) => {
+    if (!HA_TOKEN) return res.status(503).json({ error: 'HA token not configured' });
+    try {
+      const { entityId } = req.body;
+      if (!entityId) return res.status(400).json({ error: 'entityId required' });
+      const filename = req.params.id;
+      const host = req.headers.host || 'localhost:8406';
+      const proto = req.protocol || 'http';
+      const audioUrl = `${proto}://${host}/api/music/audio/${encodeURIComponent(filename)}`;
+      const contentId = `x-rincon-mp3radio://${audioUrl.replace(/^https?:\/\//, '')}`;
+
+      const r = await fetch(`${HA_URL}/api/services/media_player/play_media`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${HA_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          entity_id: entityId,
+          media_content_type: 'music',
+          media_content_id: contentId,
+        }),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!r.ok) {
+        const text = await r.text();
+        return res.status(r.status).json({ error: `HA error: ${text.substring(0, 200)}` });
+      }
+
+      res.json({ success: true, entityId, contentId });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Serve generated music MP3s
+  app.use('/api/music/audio', express.static(MUSIC_DIR));
+
+  // GET /api/music/generate/jobs — List all generation jobs
+  app.get('/api/music/generate/jobs', portalAuth, (req, res) => {
+    if (!generationManager) return res.json({ jobs: [] });
+    res.json({ jobs: generationManager.getAllJobs() });
+  });
+
+  // Serve service worker with correct scope
+  app.get('/sw.js', (req, res) => {
+    res.setHeader('Service-Worker-Allowed', '/');
+    res.setHeader('Content-Type', 'application/javascript');
+    res.sendFile(path.join(__dirname, 'portal', 'sw.js'));
+  });
+
+  // =========================================================================
+  // Phase 3 — Demo Sequences
+  // =========================================================================
+
+  const demo = new DemoEngine(orchestrator);
+
+  // GET /api/demo/sequences — List available sequences
+  app.get('/api/demo/sequences', portalAuth, (req, res) => {
+    res.json({ sequences: demo.getSequences() });
+  });
+
+  // GET /api/demo/status — Current demo state
+  app.get('/api/demo/status', portalAuth, (req, res) => {
+    res.json(demo.getStatus());
+  });
+
+  // POST /api/demo/start — Launch a demo sequence
+  app.post('/api/demo/start', portalAuth, async (req, res) => {
+    try {
+      const { sequence } = req.body;
+      if (!sequence) return res.status(400).json({ error: 'sequence required' });
+      const result = await demo.start(sequence);
+      if (!result.success) return res.status(409).json(result);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/demo/stop — Abort running demo, restore NORMAL
+  app.post('/api/demo/stop', portalAuth, async (req, res) => {
+    try {
+      const result = await demo.stop();
+      if (!result.success) return res.status(409).json(result);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  return demo;
 }
 
-function setupWebSocket(httpServer, orchestrator) {
+function setupWebSocket(httpServer, orchestrator, demo, { generationManager } = {}) {
   let WebSocket;
   try { WebSocket = require('ws'); } catch { console.log('[Portal] ws package not installed — WebSocket disabled'); return null; }
 
   const wss = new WebSocket.Server({ server: httpServer, path: '/ws' });
+
+  // Wire demo engine broadcast to all WebSocket clients
+  if (demo) {
+    demo.broadcast = (msg) => {
+      const data = JSON.stringify(msg);
+      for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) client.send(data);
+      }
+    };
+  }
 
   wss.on('connection', (ws, req) => {
     const key = process.env.PORTAL_KEY;
@@ -402,6 +687,69 @@ function setupWebSocket(httpServer, orchestrator) {
         if (client.readyState === WebSocket.OPEN) client.send(msg);
       }
     });
+  }
+
+  // Now-playing poller — broadcast track changes to all clients
+  let lastNowPlaying = '';
+  if (HA_TOKEN) {
+    const pollSpeaker = async () => {
+      try {
+        // Get first active Sonos speaker
+        const r = await fetch(`${HA_URL}/api/states`, {
+          headers: { 'Authorization': `Bearer ${HA_TOKEN}` },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!r.ok) return;
+        const states = await r.json();
+        const playing = states.find(s =>
+          s.entity_id.startsWith('media_player.') &&
+          s.state === 'playing' &&
+          s.attributes?.media_title &&
+          !s.entity_id.includes('tv') &&
+          !s.entity_id.includes('avr') &&
+          !s.entity_id.includes('apple_tv')
+        );
+
+        if (!playing) return;
+
+        const key = `${playing.entity_id}:${playing.attributes.media_title}:${playing.attributes.media_artist}`;
+        if (key === lastNowPlaying) return;
+        lastNowPlaying = key;
+
+        const msg = JSON.stringify({
+          type: 'now_playing',
+          entityId: playing.entity_id,
+          name: playing.attributes.friendly_name,
+          title: playing.attributes.media_title,
+          artist: playing.attributes.media_artist || '',
+          album: playing.attributes.media_album_name || '',
+          albumArt: playing.attributes.entity_picture
+            ? `${HA_URL}${playing.attributes.entity_picture}`
+            : null,
+          state: playing.state,
+          volume: playing.attributes.volume_level,
+        });
+
+        for (const client of wss.clients) {
+          if (client.readyState === WebSocket.OPEN) client.send(msg);
+        }
+      } catch {}
+    };
+
+    setInterval(pollSpeaker, 3000);
+    console.log('[Portal] Now-playing poller active (3s)');
+  }
+
+  // Wire generation manager broadcasts
+  if (generationManager) {
+    const broadcastGen = (type, job) => {
+      const msg = JSON.stringify({ type, job });
+      for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) client.send(msg);
+      }
+    };
+    generationManager.onComplete = (job) => broadcastGen('generation_complete', job);
+    generationManager.onFailed = (job) => broadcastGen('generation_failed', job);
   }
 
   console.log('[Portal] WebSocket server attached at /ws');

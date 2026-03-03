@@ -9,6 +9,9 @@
   <meta name="theme-color" content="#0a0a1a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Villa Romanza">
+  <link rel="apple-touch-icon" href="/portal/icons/icon.svg">
+  <link rel="icon" type="image/svg+xml" href="/portal/icons/icon.svg">
 </head>
 <body>
   <!-- Login -->
@@ -30,6 +33,7 @@
       <div class="nav-tabs">
         <button class="nav-tab active" data-panel="chat">Chat</button>
         <button class="nav-tab" data-panel="dashboard">Dashboard</button>
+        <button class="nav-tab" data-panel="demo">Demo</button>
         <button class="nav-tab" data-panel="visual">Visual</button>
         <button class="nav-tab" data-panel="music">Music</button>
         <button class="nav-tab" data-panel="audio">Audio</button>
@@ -44,6 +48,7 @@
     <main id="main">
       <section id="panel-chat" class="panel active"></section>
       <section id="panel-dashboard" class="panel"></section>
+      <section id="panel-demo" class="panel"></section>
       <section id="panel-visual" class="panel"></section>
       <section id="panel-music" class="panel"></section>
       <section id="panel-audio" class="panel"></section>
@@ -51,9 +56,17 @@
     </main>
   </div>
 
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(reg => console.log('[SW] Registered:', reg.scope))
+        .catch(err => console.log('[SW] Registration failed:', err));
+    }
+  </script>
   <script src="/portal/app.js"></script>
   <script src="/portal/modules/chat.js"></script>
   <script src="/portal/modules/dashboard.js"></script>
+  <script src="/portal/modules/demo.js"></script>
   <script src="/portal/modules/visual.js"></script>
   <script src="/portal/modules/music.js"></script>
   <script src="/portal/modules/audio-viz.js"></script>

@@ -33,6 +33,16 @@ try { HAAgent = require('./src/agents/ha-agent'); } catch {}
 try { HAContextProvider = require('./src/ha-context-provider'); } catch {}
 let MoodOverrideDetector;
 try { MoodOverrideDetector = require('./src/mood-override-detector'); } catch {}
+let UnifiedMusicService, SpotifyAdapter, AppleMusicAdapter, AmazonAdapter;
+let SunoAdapter, UdioAdapter, AmazonAIAdapter, GenerationManager;
+try { ({ UnifiedMusicService } = require('./src/music/music-service')); } catch {}
+try { ({ SpotifyAdapter } = require('./src/music/spotify-adapter')); } catch {}
+try { ({ AppleMusicAdapter } = require('./src/music/apple-music-adapter')); } catch {}
+try { ({ AmazonAdapter } = require('./src/music/amazon-adapter')); } catch {}
+try { ({ SunoAdapter } = require('./src/music/suno-adapter')); } catch {}
+try { ({ UdioAdapter } = require('./src/music/udio-adapter')); } catch {}
+try { ({ AmazonAIAdapter } = require('./src/music/amazon-ai-adapter')); } catch {}
+try { ({ GenerationManager } = require('./src/music/generation-manager')); } catch {}
 let OpenAIAgent;
 try { OpenAIAgent = require('./src/agents/openai-agent'); } catch {}
 let AgentToolkit, addHATools, addCrestronTools, addUtilityTools;
@@ -484,11 +494,65 @@ Request: {task}`
     console.log('Registered: mock (fallback)');
   }
 
+  // --- Music Platform ---
+  let musicService = null;
+  let genManager = null;
+
+  if (UnifiedMusicService) {
+    musicService = new UnifiedMusicService();
+
+    // Register streaming adapters
+    if (SpotifyAdapter) {
+      const spotify = new SpotifyAdapter();
+      musicService.registerAdapter(spotify);
+      console.log(`Music: spotify (${spotify.isAvailable() ? 'available' : 'no credentials'})`);
+    }
+    if (AppleMusicAdapter) {
+      const apple = new AppleMusicAdapter();
+      musicService.registerAdapter(apple);
+      console.log(`Music: apple_music (${apple.isAvailable() ? 'available' : 'no credentials'})`);
+    }
+    if (AmazonAdapter) {
+      const amazon = new AmazonAdapter({ catalog: [] }); // TODO: load from audio_sources.yaml
+      musicService.registerAdapter(amazon);
+      console.log(`Music: amazon (catalog)`);
+    }
+
+    // Register AI generators
+    if (SunoAdapter) {
+      const suno = new SunoAdapter({ apiKey: process.env.SUNO_API_KEY });
+      musicService.registerGenerator(suno);
+      console.log(`Music: suno (${suno.isAvailable() ? 'available' : 'no API key'})`);
+    }
+    if (UdioAdapter) {
+      const udio = new UdioAdapter({ apiKey: process.env.UDIO_API_KEY });
+      musicService.registerGenerator(udio);
+      console.log(`Music: udio (${udio.isAvailable() ? 'available' : 'no API key'})`);
+    }
+    if (AmazonAIAdapter) {
+      const amazonAI = new AmazonAIAdapter();
+      musicService.registerGenerator(amazonAI);
+    }
+
+    // Generation manager
+    if (GenerationManager) {
+      genManager = new GenerationManager({
+        musicService,
+        musicDir: process.env.MUSIC_DIR || path.join(process.env.HOME || '/tmp', 'generated-music'),
+      });
+      console.log('Music: generation manager active');
+    }
+
+    const { services } = musicService.getAvailableServices();
+    const avail = services.filter(s => s.available).map(s => s.name);
+    console.log(`Music Platform: ${avail.length} services available (${avail.join(', ') || 'none'})`);
+  }
+
   // Create parent Express app with portal, then mount API sub-app
   const apiApp = createAPI(orc);
   const app = express();
   app.use(express.json());
-  setupPortal(app, orc);   // Portal routes first (GET / serves portal)
+  const demoEngine = setupPortal(app, orc, { musicService, generationManager: genManager });
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
   const server = app.listen(port, () => {
@@ -506,7 +570,7 @@ Request: {task}`
     console.log(`  GET  /api/rl-stats   - RL learning state`);
   });
 
-  const wss = setupWebSocket(server, orc);
+  const wss = setupWebSocket(server, orc, demoEngine, { generationManager: genManager });
 
   const shutdown = async () => {
     orc.shutdown();
