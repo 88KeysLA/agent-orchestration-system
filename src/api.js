@@ -132,6 +132,11 @@ function createAPI(orchestrator) {
     }
   });
 
+  // GET /api/health — Lightweight health check for deployment
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', uptime: process.uptime() });
+  });
+
   // GET /api/status — System status
   app.get('/api/status', (req, res) => {
     try {
