@@ -38,14 +38,19 @@ function validateSession(sessionId) {
 
 function authMiddleware(req, res, next) {
   // Allow login endpoint
-  if (req.path === '/api/auth/login') return next();
+  if (req.path === '/api/auth/login' || req.path === '/login') return next();
   
   // Check session cookie
   const sessionId = req.cookies?.villa_session;
   const session = validateSession(sessionId);
   
   if (!session) {
-    return res.status(401).json({ error: 'Unauthorized' });
+    // For API requests, return 401
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    // For page requests, redirect to login
+    return res.redirect('/login');
   }
   
   req.user = session.username;
