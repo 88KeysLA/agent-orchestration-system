@@ -36,10 +36,24 @@
 
   async function playURL(url, volume = 0.8) {
     try {
-      // Detect codec from URL
       const codec = detectCodec(url);
       const spatialAudio = codec === 'atmos' || url.includes('atmos');
       const device = els.deviceSelect ? els.deviceSelect.value : 'media_player.anthem_740';
+      
+      // Check if streaming to all Sonos
+      if (device === 'sonos_all') {
+        const result = await VP.apiFetch('/api/audio/sonos/stream-all', {
+          method: 'POST',
+          body: JSON.stringify({ url, volume })
+        });
+        
+        if (result.success) {
+          showStatus(`🏠 Streaming to ${result.stream.deviceCount} Sonos devices`, false);
+        } else {
+          showStatus(result.message || 'Sonos streaming failed', true);
+        }
+        return;
+      }
       
       const result = await VP.apiFetch('/api/music/play', {
         method: 'POST',
@@ -125,6 +139,7 @@
               <option value="media_player.anthem_740">Anthem 740 (Theatre)</option>
               <option value="media_player.anthem_540">Anthem 540 (Master)</option>
               <option value="media_player.anthem_mrx_slm">MRX SLM (Sunroom)</option>
+              <option value="sonos_all">🏠 All Sonos Amps (Whole House)</option>
             </select>
           </div>
 
@@ -145,6 +160,14 @@
               <button id="audition-play" class="play-btn">▶ Play</button>
             </div>
             <div id="audition-status" class="status-message"></div>
+          </div>
+
+          <div class="dash-section">
+            <h2>Sonos Control</h2>
+            <div class="sonos-controls">
+              <button id="sonos-status-btn" class="control-btn">📊 Sonos Status</button>
+              <div id="sonos-info" class="sonos-info"></div>
+            </div>
           </div>
 
           <div class="dash-section">
@@ -281,6 +304,39 @@
             font-size: 14px;
             line-height: 1.6;
           }
+          .sonos-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+          }
+          .control-btn {
+            padding: 10px 20px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+          }
+          .control-btn:hover {
+            border-color: #666;
+          }
+          .sonos-info {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 13px;
+            line-height: 1.6;
+            max-height: 300px;
+            overflow-y: auto;
+          }
+          .sonos-device {
+            padding: 8px;
+            margin: 5px 0;
+            background: #0a0a0a;
+            border-radius: 4px;
+            border-left: 3px solid #4CAF50;
+          }
         </style>
       `;
 
@@ -289,6 +345,8 @@
       els.urlInput = document.getElementById('audition-url');
       els.volumeSlider = document.getElementById('audition-volume');
       els.volumeLabel = document.getElementById('audition-volume-label');
+      els.sonosStatusBtn = document.getElementById('sonos-status-btn');
+      els.sonosInfo = document.getElementById('sonos-info');
       els.playBtn = document.getElementById('audition-play');
       els.status = document.getElementById('audition-status');
       els.info = document.getElementById('audition-info');
@@ -331,6 +389,29 @@
           const volume = parseInt(els.volumeSlider.value) / 100;
           playURL(url, volume);
         });
+      });
+
+      // Sonos status button
+      els.sonosStatusBtn.addEventListener('click', async () => {
+        try {
+          const result = await VP.apiFetch('/api/audio/sonos-status');
+          if (result.available) {
+            let html = `<strong>Sonos System (${result.count} devices)</strong><br><br>`;
+            result.devices.forEach(d => {
+              html += `<div class="sonos-device">
+                <strong>${d.name}</strong><br>
+                State: ${d.state}<br>
+                Volume: ${Math.round(d.volume * 100)}%<br>
+                ${d.group_members.length > 1 ? `Group: ${d.group_members.length} members` : 'Solo'}
+              </div>`;
+            });
+            els.sonosInfo.innerHTML = html;
+          } else {
+            els.sonosInfo.innerHTML = '<em>HA integration pending</em>';
+          }
+        } catch (err) {
+          els.sonosInfo.innerHTML = `<em>Error: ${err.message}</em>`;
+        }
       });
     },
 

@@ -97,6 +97,149 @@ function setupAudioStreamingRoutes(app) {
     }
   });
 
+  // Get Sonos system status
+  app.get('/api/audio/sonos-status', async (req, res) => {
+    try {
+      if (!haClient) {
+        return res.json({ 
+          available: false,
+          message: 'HA integration pending'
+        });
+      }
+
+      const states = await haClient.getStates();
+      const sonosDevices = states.filter(s => 
+        s.entity_id.startsWith('media_player.') &&
+        s.entity_id.includes('sonos')
+      );
+
+      res.json({
+        available: true,
+        count: sonosDevices.length,
+        devices: sonosDevices.map(s => ({
+          entity_id: s.entity_id,
+          name: s.attributes.friendly_name || s.entity_id,
+          state: s.state,
+          volume: s.attributes.volume_level,
+          group_members: s.attributes.group_members || []
+        }))
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Stream to all Sonos amps (whole house)
+  app.post('/api/audio/sonos/stream-all', async (req, res) => {
+    try {
+      const { url, volume = 0.5 } = req.body;
+
+      if (!url) {
+        return res.status(400).json({ error: 'URL required' });
+      }
+
+      if (!haClient) {
+        return res.json({
+          success: false,
+          message: 'HA integration pending'
+        });
+      }
+
+      // Get all Sonos devices
+      const states = await haClient.getStates();
+      const sonosDevices = states.filter(s => 
+        s.entity_id.startsWith('media_player.') &&
+        s.entity_id.includes('sonos')
+      );
+
+      if (sonosDevices.length === 0) {
+        return res.status(404).json({ error: 'No Sonos devices found' });
+      }
+
+      // Stream to all Sonos devices
+      const results = await Promise.all(
+        sonosDevices.map(async (device) => {
+          try {
+            await haClient.callService('media_player', 'play_media', {
+              entity_id: device.entity_id,
+              media_content_id: url,
+              media_content_type: 'music'
+            });
+
+            await haClient.callService('media_player', 'volume_set', {
+              entity_id: device.entity_id,
+              volume_level: volume
+            });
+
+            return { entity_id: device.entity_id, success: true };
+          } catch (err) {
+            return { entity_id: device.entity_id, success: false, error: err.message };
+          }
+        })
+      );
+
+      currentStream = {
+        url,
+        volume,
+        codec: detectCodec(url),
+        device: 'sonos_all',
+        state: 'playing',
+        startedAt: Date.now(),
+        deviceCount: sonosDevices.length
+      };
+
+      res.json({
+        success: true,
+        stream: currentStream,
+        results,
+        message: `Streaming to ${sonosDevices.length} Sonos devices`
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Control Sonos group
+  app.post('/api/audio/sonos/group', async (req, res) => {
+    try {
+      const { action, master, members } = req.body;
+
+      if (!haClient) {
+        return res.json({
+          success: false,
+          message: 'HA integration pending'
+        });
+      }
+
+      if (action === 'join' && master && members) {
+        // Join members to master
+        await haClient.callService('sonos', 'join', {
+          master: master,
+          entity_id: members
+        });
+
+        res.json({
+          success: true,
+          message: `Joined ${members.length} devices to ${master}`
+        });
+      } else if (action === 'unjoin' && members) {
+        // Unjoin members
+        await haClient.callService('sonos', 'unjoin', {
+          entity_id: members
+        });
+
+        res.json({
+          success: true,
+          message: `Unjoined ${members.length} devices`
+        });
+      } else {
+        res.status(400).json({ error: 'Invalid action or missing parameters' });
+      }
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Get Sonos system status (fed from MRX SLM)
   app.get('/api/audio/sonos-status', async (req, res) => {
     try {
