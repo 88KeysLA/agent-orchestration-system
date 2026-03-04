@@ -9,6 +9,94 @@
   let activeService = 'mantis';
   let availableServices = [];
   let els = {};
+  let presets = [];
+
+  // Preset management
+  function loadPresets() {
+    const stored = localStorage.getItem('villa_audio_presets');
+    presets = stored ? JSON.parse(stored) : [];
+    renderPresets();
+  }
+
+  function savePresets() {
+    localStorage.setItem('villa_audio_presets', JSON.stringify(presets));
+  }
+
+  function renderPresets() {
+    if (!els.presetSelect) return;
+    
+    els.presetSelect.innerHTML = '<option value="">-- Select Preset --</option>';
+    presets.forEach((preset, idx) => {
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = preset.name;
+      els.presetSelect.appendChild(opt);
+    });
+  }
+
+  function savePreset() {
+    const name = els.presetName.value.trim();
+    if (!name) {
+      showStatus('Enter preset name', true);
+      return;
+    }
+
+    const preset = {
+      name,
+      device: els.deviceSelect.value,
+      volume: parseInt(els.volumeSlider.value),
+      service: activeService
+    };
+
+    // Check if preset exists
+    const existingIdx = presets.findIndex(p => p.name === name);
+    if (existingIdx >= 0) {
+      presets[existingIdx] = preset;
+      showStatus(`Updated preset: ${name}`, false);
+    } else {
+      presets.push(preset);
+      showStatus(`Saved preset: ${name}`, false);
+    }
+
+    savePresets();
+    renderPresets();
+    els.presetName.value = '';
+  }
+
+  function loadPreset() {
+    const idx = els.presetSelect.value;
+    if (idx === '') {
+      showStatus('Select a preset', true);
+      return;
+    }
+
+    const preset = presets[idx];
+    if (!preset) return;
+
+    els.deviceSelect.value = preset.device;
+    els.volumeSlider.value = preset.volume;
+    els.volumeLabel.textContent = preset.volume + '%';
+    
+    if (preset.service !== activeService) {
+      switchService(preset.service);
+    }
+
+    showStatus(`Loaded: ${preset.name}`, false);
+  }
+
+  function deletePreset() {
+    const idx = els.presetSelect.value;
+    if (idx === '') {
+      showStatus('Select a preset', true);
+      return;
+    }
+
+    const preset = presets[idx];
+    presets.splice(idx, 1);
+    savePresets();
+    renderPresets();
+    showStatus(`Deleted: ${preset.name}`, false);
+  }
 
   async function fetchServices() {
     try {
@@ -374,11 +462,19 @@
       els.urlInput = document.getElementById('audition-url');
       els.volumeSlider = document.getElementById('audition-volume');
       els.volumeLabel = document.getElementById('audition-volume-label');
+      els.presetSelect = document.getElementById('preset-select');
+      els.presetName = document.getElementById('preset-name');
+      els.presetLoad = document.getElementById('preset-load');
+      els.presetSave = document.getElementById('preset-save');
+      els.presetDelete = document.getElementById('preset-delete');
       els.sonosStatusBtn = document.getElementById('sonos-status-btn');
       els.sonosInfo = document.getElementById('sonos-info');
       els.playBtn = document.getElementById('audition-play');
       els.status = document.getElementById('audition-status');
       els.info = document.getElementById('audition-info');
+
+      // Load presets
+      loadPresets();
 
       // Service switcher
       els.serviceGrid.addEventListener('click', (e) => {
@@ -419,6 +515,11 @@
           playURL(url, volume);
         });
       });
+
+      // Preset buttons
+      els.presetLoad.addEventListener('click', loadPreset);
+      els.presetSave.addEventListener('click', savePreset);
+      els.presetDelete.addEventListener('click', deletePreset);
 
       // Sonos status button
       els.sonosStatusBtn.addEventListener('click', async () => {
