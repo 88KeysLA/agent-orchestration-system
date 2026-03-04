@@ -25,6 +25,7 @@
   let analyser = null;
   let freqData = null;
   let currentSource = null;
+  let crossfadeSource = null; // Track crossfade's next-preview source for cleanup
   let currentBuffer = null;
   let nextBuffer = null;
   let masterGain = null;
@@ -122,6 +123,14 @@
       try { currentSource.stop(); } catch {}
       currentSource = null;
     }
+    if (crossfadeSource) {
+      try { crossfadeSource.stop(); } catch {}
+      crossfadeSource = null;
+    }
+    // Zero all gains to silence any leaked nodes
+    if (previewGain) { previewGain.gain.cancelScheduledValues(0); previewGain.gain.value = 0; }
+    if (nextPreviewGain) { nextPreviewGain.gain.cancelScheduledValues(0); nextPreviewGain.gain.value = 0; }
+    if (bedGain) { bedGain.gain.cancelScheduledValues(0); bedGain.gain.value = 0; }
   }
 
   // ---------------------------------------------------------------------------
@@ -228,7 +237,10 @@
       try { osc.stop(); } catch {}
     }
     bedOscillators = [];
-    if (bedGain) bedGain.gain.cancelScheduledValues(0);
+    if (bedGain) {
+      bedGain.gain.cancelScheduledValues(0);
+      bedGain.gain.value = 0;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -261,9 +273,9 @@
           if (!state.running) return;
           nextPreviewGain.gain.setValueAtTime(0, ctx.currentTime);
           nextPreviewGain.gain.linearRampToValueAtTime(1.0, ctx.currentTime + 2);
-          const nextSource = playBuffer(nextBuffer, nextPreviewGain);
-          // This will be replaced when the track officially starts
-          nextSource.onended = () => {};
+          if (crossfadeSource) { try { crossfadeSource.stop(); } catch {} }
+          crossfadeSource = playBuffer(nextBuffer, nextPreviewGain);
+          crossfadeSource.onended = () => { crossfadeSource = null; };
         }, 3000);
       } catch (err) {
         console.log('[Jukebox] Next preview pre-load failed:', err.message);
@@ -835,6 +847,10 @@
     state.tracks = [];
     stopCurrentPlayback();
     stopVisualizer();
+    // Suspend AudioContext to kill any leaked audio nodes
+    if (audioCtx && audioCtx.state === 'running') {
+      audioCtx.suspend().catch(() => {});
+    }
   }
 
   function renderPlaylist() {
