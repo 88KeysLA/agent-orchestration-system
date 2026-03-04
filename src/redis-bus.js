@@ -18,11 +18,21 @@ class RedisBus {
     this._pub = null;
     this._sub = null;
     this._connected = false;
+    this.maxMessageSize = options.maxMessageSize || 1024 * 1024; // 1MB
+    this.redisOptions = {
+      lazyConnect: true,
+      password: options.password || process.env.REDIS_PASSWORD,
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true
+    };
   }
 
   async connect() {
-    this._pub = new Redis(this.redisUrl, { lazyConnect: true });
-    this._sub = new Redis(this.redisUrl, { lazyConnect: true });
+    this._pub = new Redis(this.redisUrl, this.redisOptions);
+    this._sub = new Redis(this.redisUrl, this.redisOptions);
+
+    this._pub.on('error', (err) => console.error('Redis pub error:', err));
+    this._sub.on('error', (err) => console.error('Redis sub error:', err));
 
     await this._pub.connect();
     await this._sub.connect();
@@ -31,7 +41,12 @@ class RedisBus {
     this._sub.on('message', (channel, raw) => {
       const topic = channel.replace(`${this.namespace}:`, '');
       let msg;
-      try { msg = JSON.parse(raw); } catch { return; }
+      try { 
+        msg = JSON.parse(raw); 
+      } catch (err) {
+        console.error('JSON parse failed:', { channel, error: err.message });
+        return;
+      }
 
       this.subscribers.forEach((topics, agentId) => {
         if (agentId === msg.fromAgent) return; // self-exclusion
@@ -58,33 +73,47 @@ class RedisBus {
 
   // Publish message to a topic
   publish(topic, payload, fromAgent) {
+    if (!topic || typeof topic !== 'string') throw new Error('Invalid topic');
+    if (!fromAgent || typeof fromAgent !== 'string') throw new Error('Invalid fromAgent');
+    
     const msg = JSON.stringify({ topic, payload, fromAgent, timestamp: Date.now() });
+    if (msg.length > this.maxMessageSize) {
+      throw new Error(`Message too large: ${msg.length} bytes (max ${this.maxMessageSize})`);
+    }
+    
     this._pub.publish(`${this.namespace}:${topic}`, msg);
   }
 
   // Request-response pattern (with timeout)
   async request(topic, payload, fromAgent, timeout = 5000) {
     const responseId = `response:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+    const responseChannel = `${this.namespace}:${responseId}`;
+    let handler;
 
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this._sub.unsubscribe(`${this.namespace}:${responseId}`);
+      const cleanup = async () => {
+        clearTimeout(timer);
+        if (handler) this._sub.removeListener('message', handler);
+        await this._sub.unsubscribe(responseChannel);
+      };
+
+      const timer = setTimeout(async () => {
+        await cleanup();
         reject(new Error(`Request timeout on ${topic}`));
       }, timeout);
 
-      // Listen for response (filter by channel to avoid cross-talk)
-      const responseChannel = `${this.namespace}:${responseId}`;
-      this._sub.subscribe(responseChannel);
-      const handler = (channel, raw) => {
+      handler = async (channel, raw) => {
         if (channel !== responseChannel) return;
-        clearTimeout(timer);
-        this._sub.removeListener('message', handler);
-        this._sub.unsubscribe(responseChannel);
-        try { resolve(JSON.parse(raw).payload); } catch { reject(new Error('Bad response')); }
+        await cleanup();
+        try { 
+          resolve(JSON.parse(raw).payload); 
+        } catch (err) { 
+          reject(new Error(`Bad response: ${err.message}`)); 
+        }
       };
-      this._sub.on('message', handler);
 
-      // Send request
+      this._sub.subscribe(responseChannel);
+      this._sub.on('message', handler);
       this.publish(topic, { ...payload, responseId }, fromAgent);
     });
   }
@@ -92,8 +121,24 @@ class RedisBus {
   // Disconnect cleanly
   async disconnect() {
     this._connected = false;
+    
+    // Unsubscribe from all channels
+    const channels = new Set();
+    this.subscribers.forEach(topics => {
+      topics.forEach((handlers, topic) => {
+        channels.add(`${this.namespace}:${topic}`);
+      });
+    });
+    
+    for (const channel of channels) {
+      await this._sub.unsubscribe(channel);
+    }
+    
+    this.subscribers.clear();
     await this._pub?.quit();
     await this._sub?.quit();
+    this._pub = null;
+    this._sub = null;
   }
 
   get connected() {
