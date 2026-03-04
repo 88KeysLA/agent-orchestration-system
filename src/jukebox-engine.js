@@ -176,42 +176,45 @@ class JukeboxEngine {
       throw new Error(`Not enough tracks found for mood "${mood}" (got ${allTracks.length})`);
     }
 
-    // 3. Fetch audio features
+    // 3. Fetch audio features (may fail — Spotify deprecated this for new apps in Nov 2024)
     const ids = allTracks.map(t => t.id);
     let features = {};
     try {
       features = await spotifyAdapter.getAudioFeatures(ids);
+      console.log(`[Jukebox] Got audio features for ${Object.keys(features).length} tracks`);
     } catch (err) {
-      console.log(`[Jukebox] Audio features fetch failed: ${err.message}`);
+      console.log(`[Jukebox] Audio features unavailable (${err.message}) — using estimated features`);
     }
 
     // 4. Enrich tracks with features + camelot codes
     const enriched = allTracks.map(t => {
       const f = features[t.id] || {};
-      const camelot = (f.key !== undefined && f.mode !== undefined)
-        ? getCamelot(f.key, f.mode)
-        : null;
+      const hasFeatures = f.key !== undefined && f.mode !== undefined;
+      const camelot = hasFeatures ? getCamelot(f.key, f.mode) : null;
+
+      // Estimate features from mood if Spotify features unavailable
+      if (!hasFeatures) {
+        const est = this._estimateFeatures(mood);
+        Object.assign(f, est);
+      }
+
       return {
         ...t,
         features: f,
         camelot,
-        chordTones: (f.key !== undefined && f.mode !== undefined)
-          ? getChordTones(f.key, f.mode)
-          : null,
+        chordTones: hasFeatures ? getChordTones(f.key, f.mode) : this._estimateChordTones(mood),
       };
-    }).filter(t => t.camelot); // Only keep tracks with valid key info
+    });
 
-    if (enriched.length < 2) {
-      // Fall back to all tracks without harmonic filtering
-      const fallback = allTracks.slice(0, 8).map(t => {
-        const f = features[t.id] || {};
-        return { ...t, features: f, camelot: null, chordTones: null };
-      });
-      return this._startSession(sessionId, mood, fallback);
+    // 5. Sequence — harmonic if we have camelot data, otherwise energy-shuffle
+    const withCamelot = enriched.filter(t => t.camelot);
+    let sequenced;
+    if (withCamelot.length >= 2) {
+      sequenced = this._harmonicSequence(withCamelot);
+    } else {
+      // Shuffle with gentle energy arc: start mid, rise, peak, descend
+      sequenced = this._energyArcSequence(enriched);
     }
-
-    // 5. Sequence by Camelot wheel + energy curve (greedy nearest-neighbor)
-    const sequenced = this._harmonicSequence(enriched);
 
     return this._startSession(sessionId, mood, sequenced.slice(0, 10));
   }
@@ -419,6 +422,92 @@ class JukeboxEngine {
         console.log(`[Jukebox] Image gen failed for "${track.title}": ${err.message}`);
       }
     }
+  }
+
+  /**
+   * Energy-arc sequencing when harmonic data unavailable.
+   * Creates a gentle rise-peak-descend curve.
+   */
+  _energyArcSequence(tracks) {
+    if (tracks.length <= 2) return tracks;
+    // Shuffle first for variety
+    const shuffled = [...tracks].sort(() => Math.random() - 0.5);
+    // Sort by estimated energy
+    shuffled.sort((a, b) => (a.features?.energy || 0.5) - (b.features?.energy || 0.5));
+    // Interleave: pick from alternating ends for a natural arc
+    const result = [];
+    let lo = 0, hi = shuffled.length - 1;
+    let pickHigh = false;
+    while (lo <= hi) {
+      result.push(shuffled[pickHigh ? hi-- : lo++]);
+      pickHigh = !pickHigh;
+    }
+    return result;
+  }
+
+  /**
+   * Estimate audio features from mood when Spotify API unavailable.
+   */
+  _estimateFeatures(mood) {
+    const m = mood.toLowerCase();
+    const MOOD_FEATURES = {
+      chill: { energy: 0.3, valence: 0.5, tempo: 90, danceability: 0.4 },
+      lounge: { energy: 0.35, valence: 0.55, tempo: 95, danceability: 0.5 },
+      jazz: { energy: 0.4, valence: 0.6, tempo: 120, danceability: 0.5 },
+      cafe: { energy: 0.35, valence: 0.6, tempo: 110, danceability: 0.45 },
+      focus: { energy: 0.25, valence: 0.4, tempo: 80, danceability: 0.3 },
+      night: { energy: 0.5, valence: 0.4, tempo: 125, danceability: 0.65 },
+      berlin: { energy: 0.6, valence: 0.35, tempo: 128, danceability: 0.7 },
+      techno: { energy: 0.7, valence: 0.3, tempo: 130, danceability: 0.75 },
+      sunset: { energy: 0.35, valence: 0.65, tempo: 100, danceability: 0.45 },
+      party: { energy: 0.8, valence: 0.7, tempo: 125, danceability: 0.8 },
+      ambient: { energy: 0.2, valence: 0.45, tempo: 75, danceability: 0.2 },
+    };
+
+    // Match first keyword found
+    for (const [key, feat] of Object.entries(MOOD_FEATURES)) {
+      if (m.includes(key)) {
+        // Add slight randomness so tracks aren't identical
+        return {
+          energy: feat.energy + (Math.random() - 0.5) * 0.15,
+          valence: feat.valence + (Math.random() - 0.5) * 0.1,
+          tempo: feat.tempo + (Math.random() - 0.5) * 15,
+          danceability: feat.danceability + (Math.random() - 0.5) * 0.1,
+        };
+      }
+    }
+    // Default mid-energy
+    return {
+      energy: 0.4 + (Math.random() - 0.5) * 0.2,
+      valence: 0.5 + (Math.random() - 0.5) * 0.15,
+      tempo: 105 + (Math.random() - 0.5) * 20,
+      danceability: 0.5 + (Math.random() - 0.5) * 0.15,
+    };
+  }
+
+  /**
+   * Estimate chord tones from mood for transition bed synthesis.
+   * Returns common keys associated with mood types.
+   */
+  _estimateChordTones(mood) {
+    const m = mood.toLowerCase();
+    // Map moods to common musical keys
+    const MOOD_KEYS = {
+      chill: { key: 0, mode: 1 },    // C major
+      jazz: { key: 5, mode: 1 },     // F major
+      cafe: { key: 7, mode: 1 },     // G major
+      lounge: { key: 9, mode: 0 },   // A minor
+      night: { key: 2, mode: 0 },    // D minor
+      berlin: { key: 4, mode: 0 },   // E minor
+      focus: { key: 0, mode: 1 },    // C major
+      sunset: { key: 7, mode: 1 },   // G major
+      ambient: { key: 0, mode: 1 },  // C major
+    };
+
+    for (const [keyword, info] of Object.entries(MOOD_KEYS)) {
+      if (m.includes(keyword)) return getChordTones(info.key, info.mode);
+    }
+    return getChordTones(0, 1); // Default: C major
   }
 
   /**
