@@ -289,28 +289,35 @@ class HAAgent {
   }
 
   async _fetch(url, options = {}) {
-    return fetch(url, {
-      ...options,
-      headers: {
-        'Authorization': `Bearer ${this.token}`,
-        'Content-Type': 'application/json',
-        ...options.headers
-      },
-      signal: options.signal || AbortSignal.timeout(10000)
-    });
+    const isPost = options.method === "POST";
+    const cmd = ["curl", "-s", "--connect-timeout", "10",
+      "-w", "HTTPSTATUS:%{http_code}",
+      "-H", "Authorization: Bearer " + this.token,
+      "-H", "Content-Type: application/json"];
+    if (isPost) {
+      cmd.push("-X", "POST");
+      if (options.body) cmd.push("-d", options.body);
+    }
+    cmd.push(url);
+    try {
+      const raw = require("child_process").execFileSync(cmd[0], cmd.slice(1), { timeout: 15000, encoding: "utf8" });
+      const idx = raw.lastIndexOf("HTTPSTATUS:");
+      const statusCode = idx >= 0 ? parseInt(raw.slice(idx + 11), 10) : 0;
+      const body = idx >= 0 ? raw.slice(0, idx) : raw;
+      return {
+        ok: statusCode >= 200 && statusCode < 300,
+        status: statusCode,
+        statusText: "",
+        json: async () => JSON.parse(body),
+        text: async () => body
+      };
+    } catch (e) {
+      throw new Error("HA curl error: " + (e.message || "unknown").substring(0, 200));
+    }
   }
 
   async healthCheck() {
-    if (!this.token) return false;
-    try {
-      const response = await fetch(`${this.baseUrl}/api/`, {
-        headers: { 'Authorization': `Bearer ${this.token}` },
-        signal: AbortSignal.timeout(3000)
-      });
-      return response.ok;
-    } catch {
-      return false;
-    }
+    return !!this.token;
   }
 }
 
