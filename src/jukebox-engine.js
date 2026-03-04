@@ -157,7 +157,7 @@ class JukeboxEngine {
     for (const query of queries) {
       try {
         const results = await spotifyAdapter.search(query, { limit: 10, type: 'track' });
-        const tracks = results.filter(t => t.type === 'track' && t.previewUrl);
+        const tracks = results.filter(t => t.type === 'track');
         allTracks.push(...tracks);
       } catch (err) {
         console.log(`[Jukebox] Search failed for "${query}": ${err.message}`);
@@ -173,7 +173,7 @@ class JukeboxEngine {
     });
 
     if (allTracks.length < 2) {
-      throw new Error(`Not enough tracks with previews found for mood "${mood}" (got ${allTracks.length})`);
+      throw new Error(`Not enough tracks found for mood "${mood}" (got ${allTracks.length})`);
     }
 
     // 3. Fetch audio features

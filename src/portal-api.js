@@ -619,18 +619,50 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
   });
 
   // GET /api/jukebox/preview/:trackId — CORS proxy for Spotify preview MP3
-  // Needed because p.scdn.co blocks CORS for Web Audio API decodeAudioData
+  // Spotify removed preview_url from the API in 2024 — we scrape it from the embed page
+  const previewCache = new Map(); // trackId → previewUrl (in-memory, cleared on restart)
   app.get('/api/jukebox/preview/:trackId', portalAuth, async (req, res) => {
-    if (!musicService) return res.status(503).json({ error: 'Music service not available' });
     try {
       const trackId = req.params.trackId;
-      const spotifyAdapter = musicService.adapters?.get('spotify');
-      if (!spotifyAdapter) return res.status(503).json({ error: 'Spotify not available' });
 
-      // Fetch track to get preview URL
-      const data = await spotifyAdapter._apiGet(`/tracks/${trackId}`);
-      const previewUrl = data.preview_url;
+      // 1. Check cache
+      let previewUrl = previewCache.get(trackId);
+
+      // 2. Try API first (some tracks still have it)
+      if (!previewUrl && musicService) {
+        const spotifyAdapter = musicService.adapters?.get('spotify');
+        if (spotifyAdapter) {
+          try {
+            const data = await spotifyAdapter._apiGet(`/tracks/${trackId}`);
+            if (data.preview_url) previewUrl = data.preview_url;
+          } catch {}
+        }
+      }
+
+      // 3. Fall back to embed page scraping
+      if (!previewUrl) {
+        try {
+          const embedRes = await fetch(`https://open.spotify.com/embed/track/${trackId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (embedRes.ok) {
+            const html = await embedRes.text();
+            const match = html.match(/"audioPreview":\s*\{\s*"url"\s*:\s*"([^"]+)"/);
+            if (match) previewUrl = match[1];
+          }
+        } catch {}
+      }
+
       if (!previewUrl) return res.status(404).json({ error: 'No preview available for this track' });
+
+      // Cache it
+      previewCache.set(trackId, previewUrl);
+      if (previewCache.size > 500) {
+        // Evict oldest entries
+        const keys = Array.from(previewCache.keys());
+        for (let i = 0; i < 100; i++) previewCache.delete(keys[i]);
+      }
 
       // Proxy the MP3
       const upstream = await fetch(previewUrl, { signal: AbortSignal.timeout(15000) });
