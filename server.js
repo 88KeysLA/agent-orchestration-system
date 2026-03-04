@@ -48,6 +48,8 @@ try { OpenAIAgent = require('./src/agents/openai-agent'); } catch {}
 let AgentToolkit, addHATools, addCrestronTools, addUtilityTools;
 try { ({ AgentToolkit, addHATools, addCrestronTools, addUtilityTools } = require('./src/agent-tools')); } catch {}
 const WorkerPool = require('./src/worker-pool');
+const logger = require('./src/logger');
+const metrics = require('./src/metrics');
 
 const HITL = require('./src/hitl');
 const { ContextManager, StaticProvider, TimeProvider } = require('./src/context-providers');
@@ -605,6 +607,53 @@ Request: {task}`
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
+  // Metrics middleware
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on('finish', () => {
+      const duration = (Date.now() - start) / 1000;
+      metrics.httpRequestDuration.labels(req.method, req.route?.path || req.path, res.statusCode).observe(duration);
+      metrics.httpRequestTotal.labels(req.method, req.route?.path || req.path, res.statusCode).inc();
+    });
+    next();
+  });
+
+  // Health check endpoint
+  app.get('/api/health', async (req, res) => {
+    const health = {
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      memory: process.memoryUsage(),
+      redis: redisBus ? 'connected' : 'disconnected',
+      workerPool: {
+        total: workerPool.workers.length,
+        busy: workerPool.workers.filter(w => w.busy).length,
+        queue: workerPool.queue.length
+      }
+    };
+
+    if (distributedPool) {
+      health.distributedPool = {
+        enabled: true,
+        nodes: distributedPool.getNodes().length
+      };
+    }
+
+    res.json(health);
+  });
+
+  // Metrics endpoint (Prometheus format)
+  app.get('/api/metrics', async (req, res) => {
+    // Update worker metrics
+    const busyCount = workerPool.workers.filter(w => w.busy).length;
+    metrics.workerUtilization.set(busyCount / workerPool.workers.length);
+    metrics.taskQueueSize.set(workerPool.queue.length);
+
+    res.set('Content-Type', metrics.register.contentType);
+    res.end(await metrics.register.metrics());
+  });
+
   // Worker pool monitoring endpoint
   app.get('/api/workers/status', (req, res) => {
     const busyCount = workerPool.workers.filter(w => w.busy).length;
@@ -663,18 +712,40 @@ Request: {task}`
 
   const wss = setupWebSocket(server, orc, engines, { generationManager: genManager });
 
+  // Graceful shutdown
   const shutdown = async () => {
+    logger.info('Shutting down gracefully...');
+    
+    // Stop accepting new requests
+    server.close(() => {
+      logger.info('HTTP server closed');
+    });
+    
+    // Shutdown components
     orc.shutdown();
     if (wss) wss.close();
+    if (workerPool) await workerPool.shutdown();
     if (redisBus) await redisBus.disconnect().catch(() => {});
-    server.close();
+    
+    logger.info('Shutdown complete');
     process.exit(0);
   };
+  
   process.on('SIGTERM', shutdown);
   process.on('SIGINT', shutdown);
+  
+  // Log uncaught errors
+  process.on('uncaughtException', (err) => {
+    logger.error('Uncaught exception:', err);
+    shutdown();
+  });
+  
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('Unhandled rejection:', { reason, promise });
+  });
 }
 
 main().catch(err => {
-  console.error('Server startup failed:', err);
+  logger.error('Server startup failed:', err);
   process.exit(1);
 });
