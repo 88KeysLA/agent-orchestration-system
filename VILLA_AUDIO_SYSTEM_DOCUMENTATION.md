@@ -20,21 +20,19 @@ Multi-zone audio streaming system with hi-fi/Atmos support via Home Assistant co
    - Connection: Network streaming via HA
    - Entity ID: `media_player.anthem_540`
 
-3. **Anthem MRX SLM** - Whole House Distribution + Sunroom
+3. **Anthem MRX SLM** - Sunroom
    - Location: Mech room (with HA server)
-   - Use: Feeds entire Sonos system + Sunroom speakers
+   - Use: Sunroom speakers only
    - Connection: Network streaming via HA
-   - Outputs: 
-     - Optical out → Sonos Amp #1 (whole house)
-     - Speaker outputs → Sunroom speakers (direct)
+   - Outputs: Speaker outputs → Sunroom speakers (direct)
    - Entity ID: `media_player.anthem_mrx_slm`
 
 ### Sonos System (20 Amps)
 
-- **Master Amp**: Sonos Amp #1 (receives optical from MRX SLM)
+- **Master Amp**: Sonos Amp #1 (receives network stream from HA)
 - **Distribution**: 19 additional Sonos Amps throughout house
-- **Sync**: TruePlay handles multi-room timing (~10ms latency)
-- **Control**: Grouped via Sonos app, fed from MRX SLM
+- **Sync**: TruePlay handles multi-room timing
+- **Control**: Grouped via Sonos app, all fed via network from HA
 
 ## Audio Flow Architecture
 
@@ -49,13 +47,10 @@ Home Assistant
      ↓
      ├─→ Anthem 740 (Theatre) ─→ Theatre speakers
      ├─→ Anthem 540 (Master) ─→ Master speakers
-     └─→ MRX SLM (Mech Room)
-              ├─→ Speaker outputs → Sunroom speakers (direct)
-              └─→ Optical out
-                    ↓
-                 Sonos Amp #1
-                    ↓ network (TruePlay synced)
-                 19 other Sonos Amps → Whole house
+     ├─→ MRX SLM (Mech Room) ─→ Sunroom speakers (direct)
+     └─→ Sonos Amp #1 (network)
+              ↓ TruePlay synced
+           19 other Sonos Amps → Whole house
 ```
 
 ## Supported Audio Formats
@@ -69,10 +64,11 @@ Home Assistant
 - **Dolby Atmos**: EC3/EAC3 (Theatre only)
 - **DTS:X**: Spatial audio (Theatre only)
 
-### Via Sonos (from MRX SLM):
-- All formats downmixed to stereo/5.1
-- Digital optical connection preserves quality
+### Via Sonos (Network Streaming):
+- All formats supported by Sonos
+- Network streaming from HA
 - No Atmos (Sonos limitation)
+- TruePlay handles multi-room sync
 
 ## Software Components
 
@@ -136,10 +132,12 @@ media_player.sonos_*         # 20 Sonos Amps
 2. **Select output device:**
    - Anthem 740 (Theatre) - Direct hi-fi/Atmos
    - Anthem 540 (Master) - Direct hi-fi
-   - MRX SLM (Whole House via Sonos + Sunroom) - Distributed audio
+   - MRX SLM (Sunroom) - Sunroom speakers
 3. **Paste audio URL** (MP3, FLAC, Atmos, etc.)
 4. **Adjust volume** (0-100%)
 5. **Click Play**
+
+**Note**: For whole-house Sonos playback, use Sonos app to group amps and stream directly from HA to Sonos.
 
 ### From API:
 
@@ -169,17 +167,18 @@ curl -X POST http://villa:8406/api/audio/stream \
 
 - **Protocol**: Network streaming over Cat6a
 - **No optical cables needed** between mech room and AVRs
-- **Exception**: MRX SLM → Sonos Amp #1 (optical for best timing)
-- **Latency**: ~50-200ms for network, ~10ms for optical
+- **All connections**: Cat6a network (no optical between devices)
+- **Latency**: ~50-200ms for network streaming
 
 ## Timing & Synchronization
 
 ### Single Zone (No Sync Issues):
 - Anthem 740 (Theatre) - Standalone
 - Anthem 540 (Master) - Standalone
+- MRX SLM (Sunroom) - Standalone
 
 ### Multi-Zone (Sonos Handles Sync):
-- MRX SLM → Sonos system
+- Sonos system receives network stream from HA
 - TruePlay compensates for room acoustics
 - All 20 Sonos Amps stay in sync
 
@@ -236,10 +235,10 @@ setupAudioStreamingRoutes(app);
 4. Test direct HA service call
 
 ### Sonos Not Playing:
-1. Verify MRX SLM optical out → Sonos Amp optical in
-2. Check Sonos Amp is set to line-in (optical)
+1. Verify Sonos Amps are on network
+2. Check HA can control Sonos entities
 3. Verify Sonos grouping in Sonos app
-4. Test MRX SLM playback first
+4. Test individual Sonos Amp first
 
 ### Timing Issues:
 1. Don't mix Anthem + Sonos for same content
@@ -280,11 +279,11 @@ setupAudioStreamingRoutes(app);
 
 **Requires**:
 - HA Anthem integration configured
-- MRX SLM optical → Sonos Amp #1 wired
-- Sonos grouping configured
+- HA Sonos integration configured
+- Sonos grouping configured in Sonos app
 
 ---
 
 **Last Updated**: March 4, 2026
-**Version**: 1.0
+**Version**: 1.1
 **Author**: Villa Orchestration System

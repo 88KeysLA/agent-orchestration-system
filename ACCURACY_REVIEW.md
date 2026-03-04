@@ -11,13 +11,12 @@
 - **Anthem 540 8K**: Master Suite - ✅ Correct  
 - **Anthem MRX SLM**: Mech room - ✅ Correct
   - Feeds Sunroom (direct speaker outputs) - ✅ Confirmed
-  - Feeds 20 Sonos Amps (optical out) - ✅ Confirmed
+  - Feeds Sunroom speakers (direct) - ✅ Confirmed
 - **20 Sonos Amps**: Whole house distribution - ✅ Correct
 
 #### 2. Network Infrastructure
 - **Cat6a**: All AVRs network-connected - ✅ Correct
-- **Optical**: MRX SLM → Sonos Amp #1 only - ✅ Correct
-- **No optical** between mech room and 740/540 - ✅ Correct (network streaming)
+- **No optical** connections needed - ✅ Correct (all network streaming)
 
 #### 3. Audio Flow
 ```
@@ -94,9 +93,6 @@ Mobile (Mantis) → Portal → Villa Server → HA → AVRs
 2. **Sonos Amp Count**: Documented as 20, not independently verified
    - **Action**: Confirm actual count when system is operational
 
-3. **MRX SLM Optical Out**: Assumed based on Anthem specs
-   - **Action**: Verify physical connection exists
-
 ### ✅ NO ISSUES FOUND
 - No contradictions between documents
 - No missing critical information
@@ -129,9 +125,9 @@ Mobile (Mantis) → Portal → Villa Server → HA → AVRs
 
 ### When Deploying
 1. **Verify HA entity IDs** match documentation
-2. **Test MRX SLM optical** → Sonos Amp #1 connection
-3. **Confirm Sonos grouping** in Sonos app
-4. **Test each AVR** independently
+2. **Configure Sonos grouping** in Sonos app
+3. **Test each AVR** independently
+4. **Test Sonos streaming** from HA directly
 
 ### Future Updates
 1. Update docs if HA entity IDs differ
