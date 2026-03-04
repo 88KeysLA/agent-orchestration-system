@@ -57,8 +57,10 @@
     "@anthropic-ai/sdk": "^0.78.0",
     "@google/genai": "^1.43.0",
     "@google/generative-ai": "^0.24.1",
+    "bcrypt": "^6.0.0",
     "cookie-parser": "^1.4.7",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.2.1",
     "ioredis": "^5.10.0",
     "ws": "^8.19.0"
   }
