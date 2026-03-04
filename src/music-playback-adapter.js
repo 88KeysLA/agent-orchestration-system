@@ -40,13 +40,28 @@ class MusicPlaybackAdapter {
   }
 
   async playMantis(contentId, options) {
-    // Mantis MCP integration
+    // Mantis routes through Villa server (no local server needed)
     if (!this.mcpClient) {
       throw new Error('MCP client not available');
     }
 
-    // TODO: Implement Mantis-specific playback when MCP tools are available
-    throw new Error('Mantis playback not yet implemented');
+    // If Mantis MCP tools are available, use them
+    const service = musicConfig.services.mantis;
+    if (service.mcpTools.length > 0) {
+      return await this.mcpClient.callTool(service.mcpTools[0], {
+        contentId,
+        ...options
+      });
+    }
+
+    // Fallback: route through Villa server
+    const MantisAudioClient = require('./mantis-audio-client');
+    const mantis = new MantisAudioClient(options.villaUrl || 'http://192.168.0.60:8406');
+    
+    return await mantis.play({
+      url: contentId,
+      volume: options.volume || 0.8
+    });
   }
 
   async search(query, options = {}) {

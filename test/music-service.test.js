@@ -109,8 +109,8 @@ test('Adapter requires MCP client for search', async () => {
 
 test('Services sorted by priority', () => {
   const available = musicConfig.getAvailableServices();
-  assert(available[0].name === 'Amazon Music', 'Amazon Music should be first (priority 1)');
-  assert(available[1].name === 'Mantis', 'Mantis should be second (priority 2)');
+  assert(available[0].name === 'Mantis', 'Mantis should be first (priority 1)');
+  assert(available[1].name === 'Amazon Music', 'Amazon Music should be second (priority 2)');
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

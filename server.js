@@ -555,6 +555,18 @@ Request: {task}`
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
+  // Setup music service routes (Mantis + Amazon Music)
+  const setupMusicServiceRoutes = require('./src/music-service-routes');
+  const musicConfig = require('./src/music-service-config');
+  musicConfig.enableService('mantis');  // Enable Mantis by default (priority 1)
+  setupMusicServiceRoutes(app, null); // MCP client can be added later
+  console.log('Music service routes: enabled (Mantis priority 1)');
+
+  // Setup audio streaming routes (hi-fi/Atmos support)
+  const setupAudioStreamingRoutes = require('./src/audio-streaming-routes');
+  setupAudioStreamingRoutes(app);
+  console.log('Audio streaming API: enabled (hi-fi/Atmos capable)');
+
   const server = app.listen(port, () => {
     console.log(`\nVilla Romanza Agent Orchestration API on port ${port}`);
     console.log(`Portal: http://localhost:${port}/`);
@@ -568,6 +580,9 @@ Request: {task}`
     console.log(`  GET  /api/images     - Generated images`);
     console.log(`  GET  /api/agents     - List agents`);
     console.log(`  GET  /api/rl-stats   - RL learning state`);
+    console.log(`  GET  /api/music/services - Music service config`);
+    console.log(`  POST /api/music/play - Play audio (Mantis/Amazon)`);
+    console.log(`  POST /api/audio/stream - Hi-fi audio streaming (Atmos capable)`);
   });
 
   const wss = setupWebSocket(server, orc, engines, { generationManager: genManager });

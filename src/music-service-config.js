@@ -6,10 +6,17 @@
 class MusicServiceConfig {
   constructor() {
     this.services = {
+      mantis: {
+        name: 'Mantis',
+        enabled: false,
+        priority: 1,
+        capabilities: ['playback', 'audio_control', 'local_audio'],
+        mcpTools: [] // To be populated when Mantis MCP is available
+      },
       amazonMusic: {
         name: 'Amazon Music',
         enabled: false,
-        priority: 1,
+        priority: 2,
         capabilities: ['playback', 'search', 'playlists', 'recommendations'],
         mcpTools: [
           'initiate_alexa_playback',
@@ -21,13 +28,6 @@ class MusicServiceConfig {
           'create_playlist',
           'get_user_playlists'
         ]
-      },
-      mantis: {
-        name: 'Mantis',
-        enabled: false,
-        priority: 2,
-        capabilities: ['playback', 'audio_control'],
-        mcpTools: [] // To be populated when Mantis MCP is available
       },
       spotify: {
         name: 'Spotify',
