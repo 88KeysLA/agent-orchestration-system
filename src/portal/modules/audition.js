@@ -163,6 +163,25 @@
           </div>
 
           <div class="dash-section">
+            <h2>Preset Zones</h2>
+            <div class="preset-controls">
+              <select id="preset-select" class="audition-input">
+                <option value="">-- Select Preset --</option>
+              </select>
+              <div class="preset-buttons">
+                <button id="preset-load" class="control-btn">📥 Load</button>
+                <button id="preset-save" class="control-btn">💾 Save</button>
+                <button id="preset-delete" class="control-btn">🗑️ Delete</button>
+              </div>
+              <input type="text" 
+                     id="preset-name" 
+                     placeholder="Preset name (e.g., Theatre Night)"
+                     class="audition-input"
+                     style="margin-top: 10px;">
+            </div>
+          </div>
+
+          <div class="dash-section">
             <h2>Sonos Control</h2>
             <div class="sonos-controls">
               <button id="sonos-status-btn" class="control-btn">📊 Sonos Status</button>
@@ -307,6 +326,16 @@
           .sonos-controls {
             display: flex;
             flex-direction: column;
+            gap: 10px;
+          }
+          .preset-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+          }
+          .preset-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
             gap: 10px;
           }
           .control-btn {

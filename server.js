@@ -156,6 +156,15 @@ async function main() {
   console.log(`Worker pool: ${workerPool.maxWorkers} cores available`);
   orc.workerPool = workerPool;
 
+  // Initialize distributed pool if Redis available
+  let distributedPool = null;
+  if (redisBus) {
+    const DistributedPool = require('./src/distributed-pool');
+    distributedPool = new DistributedPool(redisBus, workerPool);
+    orc.distributedPool = distributedPool;
+    console.log(`Distributed pool: active (multi-node federation)`);
+  }
+
   // Register remote agents from REMOTE_AGENTS env var (requires Redis bus)
   // Format: REMOTE_AGENTS=fx-ollama,show-runner,road-mac
   if (RemoteAgent && redisBus && process.env.REMOTE_AGENTS) {
@@ -599,14 +608,27 @@ Request: {task}`
   // Worker pool monitoring endpoint
   app.get('/api/workers/status', (req, res) => {
     const busyCount = workerPool.workers.filter(w => w.busy).length;
-    res.json({
-      totalWorkers: workerPool.workers.length,
-      maxWorkers: workerPool.maxWorkers,
-      busyWorkers: busyCount,
-      availableWorkers: workerPool.workers.length - busyCount,
-      queuedTasks: workerPool.queue.length,
-      cpuCores: require('os').cpus().length
-    });
+    const response = {
+      local: {
+        totalWorkers: workerPool.workers.length,
+        maxWorkers: workerPool.maxWorkers,
+        busyWorkers: busyCount,
+        availableWorkers: workerPool.workers.length - busyCount,
+        queuedTasks: workerPool.queue.length,
+        cpuCores: require('os').cpus().length,
+        hostname: require('os').hostname()
+      }
+    };
+    
+    if (distributedPool) {
+      response.distributed = {
+        enabled: true,
+        nodes: distributedPool.getNodes(),
+        totalCores: distributedPool.getNodes().reduce((sum, n) => sum + n.cores, 0) + require('os').cpus().length
+      };
+    }
+    
+    res.json(response);
   });
 
   // Setup music service routes (Mantis + Amazon Music)
