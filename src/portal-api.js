@@ -11,6 +11,8 @@ const path = require('path');
 const fs = require('fs');
 const express = require('express');
 const { DemoEngine } = require('./demo-engine');
+let JukeboxEngine;
+try { ({ JukeboxEngine } = require('./jukebox-engine')); } catch {}
 
 /**
  * HA API helper using curl subprocess.
@@ -90,7 +92,7 @@ async function proxyJSON(targetUrl, opts = {}) {
   return { status: r.status, data: await r.json() };
 }
 
-function setupRoutes(app, orchestrator, { musicService, generationManager } = {}) {
+function setupRoutes(app, orchestrator, { musicService, generationManager } = {}, _deps) {
 
   // =========================================================================
   // Phase 1 — Core Portal
@@ -571,6 +573,81 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
   });
 
   // =========================================================================
+  // Phase 5 — Visual Jukebox
+  // =========================================================================
+
+  let jukebox = null;
+  if (JukeboxEngine && musicService) {
+    jukebox = new JukeboxEngine(musicService, orchestrator);
+    console.log('[Portal] Jukebox engine initialized');
+  }
+
+  // POST /api/jukebox/create — Create a jukebox session from a mood
+  app.post('/api/jukebox/create', portalAuth, async (req, res) => {
+    if (!jukebox) return res.status(503).json({ error: 'Jukebox not available (music service required)' });
+    try {
+      const { mood } = req.body;
+      if (!mood) return res.status(400).json({ error: 'mood required' });
+      const result = await jukebox.create(mood);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/jukebox/stop — Stop the current jukebox session
+  app.post('/api/jukebox/stop', portalAuth, async (req, res) => {
+    if (!jukebox) return res.status(503).json({ error: 'Jukebox not available' });
+    try {
+      const result = await jukebox.stop();
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // GET /api/jukebox/status — Current jukebox session status
+  app.get('/api/jukebox/status', portalAuth, (req, res) => {
+    if (!jukebox) return res.json({ running: false });
+    res.json(jukebox.getStatus());
+  });
+
+  // GET /api/jukebox/sessions — Recent jukebox sessions
+  app.get('/api/jukebox/sessions', portalAuth, (req, res) => {
+    if (!jukebox) return res.json([]);
+    res.json(jukebox.getSessions());
+  });
+
+  // GET /api/jukebox/preview/:trackId — CORS proxy for Spotify preview MP3
+  // Needed because p.scdn.co blocks CORS for Web Audio API decodeAudioData
+  app.get('/api/jukebox/preview/:trackId', portalAuth, async (req, res) => {
+    if (!musicService) return res.status(503).json({ error: 'Music service not available' });
+    try {
+      const trackId = req.params.trackId;
+      const spotifyAdapter = musicService.adapters?.get('spotify');
+      if (!spotifyAdapter) return res.status(503).json({ error: 'Spotify not available' });
+
+      // Fetch track to get preview URL
+      const data = await spotifyAdapter._apiGet(`/tracks/${trackId}`);
+      const previewUrl = data.preview_url;
+      if (!previewUrl) return res.status(404).json({ error: 'No preview available for this track' });
+
+      // Proxy the MP3
+      const upstream = await fetch(previewUrl, { signal: AbortSignal.timeout(15000) });
+      if (!upstream.ok) return res.status(upstream.status).json({ error: 'Preview fetch failed' });
+
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      res.send(buffer);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // =========================================================================
   // Phase 3 — Demo Sequences
   // =========================================================================
 
@@ -610,10 +687,12 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     }
   });
 
-  return demo;
+  return { demo, jukebox };
 }
 
-function setupWebSocket(httpServer, orchestrator, demo, { generationManager } = {}) {
+function setupWebSocket(httpServer, orchestrator, engines, { generationManager } = {}) {
+  const demo = engines?.demo || engines; // backward compat: engines can be DemoEngine directly
+  const jukebox = engines?.jukebox || null;
   let WebSocket;
   try { WebSocket = require('ws'); } catch { console.log('[Portal] ws package not installed — WebSocket disabled'); return null; }
 
@@ -622,6 +701,16 @@ function setupWebSocket(httpServer, orchestrator, demo, { generationManager } = 
   // Wire demo engine broadcast to all WebSocket clients
   if (demo) {
     demo.broadcast = (msg) => {
+      const data = JSON.stringify(msg);
+      for (const client of wss.clients) {
+        if (client.readyState === WebSocket.OPEN) client.send(data);
+      }
+    };
+  }
+
+  // Wire jukebox engine broadcast to all WebSocket clients
+  if (jukebox) {
+    jukebox.broadcast = (msg) => {
       const data = JSON.stringify(msg);
       for (const client of wss.clients) {
         if (client.readyState === WebSocket.OPEN) client.send(data);

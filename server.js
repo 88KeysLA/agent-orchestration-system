@@ -552,7 +552,7 @@ Request: {task}`
   const apiApp = createAPI(orc);
   const app = express();
   app.use(express.json());
-  const demoEngine = setupPortal(app, orc, { musicService, generationManager: genManager });
+  const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
   const server = app.listen(port, () => {
@@ -570,7 +570,7 @@ Request: {task}`
     console.log(`  GET  /api/rl-stats   - RL learning state`);
   });
 
-  const wss = setupWebSocket(server, orc, demoEngine, { generationManager: genManager });
+  const wss = setupWebSocket(server, orc, engines, { generationManager: genManager });
 
   const shutdown = async () => {
     orc.shutdown();

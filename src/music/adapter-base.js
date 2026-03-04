@@ -15,6 +15,7 @@
  * @property {'track'|'album'|'playlist'|'station'|'generated'} type - Item type
  * @property {number} [duration] - Duration in seconds
  * @property {string} service - Service name (spotify, apple_music, amazon, suno, udio)
+ * @property {string} [previewUrl] - Preview audio URL (e.g. Spotify 30s preview)
  * @property {string} uri - Playback URI for Sonos
  * @property {boolean} playable - Whether item can be played directly
  */
@@ -70,6 +71,7 @@ class MusicAdapter {
       type: raw.type || 'track',
       duration: raw.duration || 0,
       service: this.name,
+      previewUrl: raw.previewUrl || '',
       uri: raw.uri || '',
       playable: raw.playable !== false,
     };

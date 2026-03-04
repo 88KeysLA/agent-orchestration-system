@@ -114,6 +114,7 @@ class SpotifyAdapter extends MusicAdapter {
       album: track.album?.name || '',
       albumArt: track.album?.images?.[0]?.url || '',
       duration: Math.round((track.duration_ms || 0) / 1000),
+      previewUrl: track.preview_url || '',
       uri: track.uri,
       type: 'track',
       playable: true,
@@ -207,6 +208,28 @@ class SpotifyAdapter extends MusicAdapter {
     } catch (err) {
       throw new Error(`spotify: search failed: ${err.message}`);
     }
+  }
+
+  /**
+   * Get audio features for a batch of track IDs.
+   * @param {string[]} ids - Spotify track IDs (max 100 per batch)
+   * @returns {Promise<Object<string, {key: number, mode: number, tempo: number, energy: number, valence: number, danceability: number, loudness: number}>>}
+   */
+  async getAudioFeatures(ids) {
+    if (!ids.length) return {};
+    const features = {};
+    for (let i = 0; i < ids.length; i += 100) {
+      const chunk = ids.slice(i, i + 100);
+      const data = await this._apiGet('/audio-features', { ids: chunk.join(',') });
+      for (const f of (data.audio_features || [])) {
+        if (f) features[f.id] = {
+          key: f.key, mode: f.mode, tempo: f.tempo,
+          energy: f.energy, valence: f.valence,
+          danceability: f.danceability, loudness: f.loudness
+        };
+      }
+    }
+    return features;
   }
 
   /**

@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'villa-v3';
+const CACHE_VERSION = 'villa-v4';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
@@ -10,6 +10,7 @@ const STATIC_ASSETS = [
   '/portal/modules/dashboard.js',
   '/portal/modules/demo.js',
   '/portal/modules/visual.js',
+  '/portal/modules/jukebox.js',
   '/portal/modules/music.js',
   '/portal/modules/audio-viz.js',
   '/portal/modules/images.js',
