@@ -552,6 +552,38 @@ Request: {task}`
   const apiApp = createAPI(orc);
   const app = express();
   app.use(express.json());
+  
+  // Add cookie parser for sessions
+  const cookieParser = require('cookie-parser');
+  app.use(cookieParser());
+  
+  // Setup authentication
+  const { authMiddleware, setupAuthRoutes } = require('./src/auth');
+  setupAuthRoutes(app);
+  
+  // Serve login page for unauthenticated requests
+  app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'src/portal/login.html'));
+  });
+  
+  // Check auth and redirect to login if needed
+  app.use((req, res, next) => {
+    // Skip auth for login page and auth endpoints
+    if (req.path === '/login' || req.path.startsWith('/api/auth/')) {
+      return next();
+    }
+    
+    // Check if authenticated
+    const sessionId = req.cookies?.villa_session;
+    if (!sessionId) {
+      if (req.path.startsWith('/api/')) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      return res.redirect('/login');
+    }
+    next();
+  });
+  
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
