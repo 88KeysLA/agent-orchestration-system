@@ -107,11 +107,11 @@ function getChordTones(key, mode) {
 // ---------------------------------------------------------------------------
 
 const PRESET_MOODS = {
-  'chill lounge': ['chill lounge ambient', 'downtempo chillhop', 'lo-fi jazz beats'],
-  'berlin night': ['berlin techno minimal', 'deep house underground', 'dark electronic ambient'],
-  'jazz cafe': ['jazz cafe smooth', 'bossa nova instrumental', 'jazz trio piano'],
-  'deep focus': ['ambient focus music', 'deep concentration instrumental', 'minimal electronic focus'],
-  'sunset vibes': ['sunset chill acoustic', 'golden hour indie', 'warm ambient electronic'],
+  'chill lounge': ['Khruangbin', 'Bonobo chill', 'Thievery Corporation'],
+  'berlin night': ['Moderat', 'Apparat', 'Nils Frahm'],
+  'jazz cafe': ['Chet Baker', 'Bill Evans trio', 'Oscar Peterson'],
+  'deep focus': ['Brian Eno ambient', 'Tycho', 'Boards of Canada'],
+  'sunset vibes': ['Washed Out', 'Toro y Moi', 'Poolside sunset'],
 };
 
 // ---------------------------------------------------------------------------
@@ -277,8 +277,31 @@ class JukeboxEngine {
     const sessionId = this._session.id;
     this._abortController?.abort();
     this._session.running = false;
+    this._session.paused = false;
     this._emit({ type: 'jukebox:stopped', sessionId });
     return { success: true, sessionId };
+  }
+
+  pause() {
+    if (!this._session?.running) return { success: false, error: 'No session running' };
+    this._session.paused = true;
+    this._emit({ type: 'jukebox:paused', sessionId: this._session.id });
+    return { success: true, paused: true };
+  }
+
+  resume() {
+    if (!this._session?.running) return { success: false, error: 'No session running' };
+    this._session.paused = false;
+    this._emit({ type: 'jukebox:resumed', sessionId: this._session.id });
+    return { success: true, paused: false };
+  }
+
+  skip() {
+    if (!this._session?.running) return { success: false, error: 'No session running' };
+    // Signal the dwell timer to end immediately
+    this._session._skipRequested = true;
+    this._emit({ type: 'jukebox:skipped', sessionId: this._session.id });
+    return { success: true };
   }
 
   getStatus() {
@@ -288,6 +311,7 @@ class JukeboxEngine {
     const next = s.tracks[s.trackIndex + 1] || null;
     return {
       running: true,
+      paused: !!s.paused,
       sessionId: s.id,
       mood: s.mood,
       trackIndex: s.trackIndex,
@@ -341,7 +365,7 @@ class JukeboxEngine {
   }
 
   /**
-   * Step through tracks with 35s dwell (30s preview + 5s transition).
+   * Step through tracks. Dwell respects pause (freezes timer) and skip (ends immediately).
    */
   async _runSession(session, signal) {
     const DWELL_MS = 35000;
@@ -350,6 +374,7 @@ class JukeboxEngine {
       if (signal.aborted) return;
 
       session.trackIndex = i;
+      session._skipRequested = false;
       const track = session.tracks[i];
       const next = session.tracks[i + 1] || null;
 
@@ -381,12 +406,28 @@ class JukeboxEngine {
         imageUrl: session.images[track.id] || null,
       });
 
-      await this._wait(DWELL_MS, signal);
+      // Dwell with pause/skip awareness (poll every 500ms)
+      await this._dwellWithTransport(DWELL_MS, session, signal);
     }
 
     session.running = false;
     this._emit({ type: 'jukebox:complete', sessionId: session.id });
     console.log(`[Jukebox] Session complete: ${session.id}`);
+  }
+
+  /**
+   * Wait for dwell_ms, but pause freezes the timer and skip ends it immediately.
+   */
+  async _dwellWithTransport(dwell_ms, session, signal) {
+    let remaining = dwell_ms;
+    const TICK = 500;
+    while (remaining > 0) {
+      if (signal.aborted || session._skipRequested) return;
+      if (!session.paused) {
+        remaining -= TICK;
+      }
+      await this._wait(TICK, signal);
+    }
   }
 
   /**
@@ -529,7 +570,7 @@ class JukeboxEngine {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'llama3.2:3b',
-          prompt: `Given the mood "${mood}", generate 3 Spotify search queries that would find matching tracks. Return ONLY the queries, one per line, no numbering or explanation.`,
+          prompt: `Given the mood "${mood}", name 3 well-known artists whose music fits this mood perfectly. Return ONLY artist names, one per line, no numbering or explanation.`,
           stream: false,
         }),
         signal: AbortSignal.timeout(10000),
@@ -547,8 +588,8 @@ class JukeboxEngine {
       // Ollama unavailable — fall back to raw mood as query
     }
 
-    // Fallback: use mood directly as search queries
-    return [mood, `${mood} music`, `${mood} instrumental`];
+    // Fallback: use mood + genre terms as queries
+    return [mood, `best ${mood} songs`, `${mood} playlist`];
   }
 
   _emit(msg) {

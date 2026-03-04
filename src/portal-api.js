@@ -606,6 +606,24 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     }
   });
 
+  // POST /api/jukebox/pause — Pause playback (freezes server timer)
+  app.post('/api/jukebox/pause', portalAuth, (req, res) => {
+    if (!jukebox) return res.status(503).json({ error: 'Jukebox not available' });
+    res.json(jukebox.pause());
+  });
+
+  // POST /api/jukebox/resume — Resume playback
+  app.post('/api/jukebox/resume', portalAuth, (req, res) => {
+    if (!jukebox) return res.status(503).json({ error: 'Jukebox not available' });
+    res.json(jukebox.resume());
+  });
+
+  // POST /api/jukebox/skip — Skip to next track
+  app.post('/api/jukebox/skip', portalAuth, (req, res) => {
+    if (!jukebox) return res.status(503).json({ error: 'Jukebox not available' });
+    res.json(jukebox.skip());
+  });
+
   // GET /api/jukebox/status — Current jukebox session status
   app.get('/api/jukebox/status', portalAuth, (req, res) => {
     if (!jukebox) return res.json({ running: false });

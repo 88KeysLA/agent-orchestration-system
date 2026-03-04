@@ -307,24 +307,26 @@
     }
   }
 
-  function togglePause() {
+  async function togglePause() {
     if (!audioCtx || !state.running) return;
     if (state.paused) {
       audioCtx.resume();
       state.paused = false;
       startProgressTimer();
+      VP.apiFetch('/api/jukebox/resume', { method: 'POST', body: '{}' }).catch(() => {});
     } else {
       audioCtx.suspend();
       state.paused = true;
       clearInterval(progressTimer);
+      VP.apiFetch('/api/jukebox/pause', { method: 'POST', body: '{}' }).catch(() => {});
     }
     updateControls();
   }
 
-  function skipTrack() {
+  async function skipTrack() {
     if (!state.running) return;
-    // Server will advance via WS, but we stop playback immediately
     stopCurrentPlayback();
+    VP.apiFetch('/api/jukebox/skip', { method: 'POST', body: '{}' }).catch(() => {});
   }
 
   // ---------------------------------------------------------------------------
@@ -830,6 +832,24 @@
             updateVisual(track, msg.imageUrl);
           }
         }
+      }
+
+      else if (msg.type === 'jukebox:paused') {
+        state.paused = true;
+        if (audioCtx && audioCtx.state === 'running') audioCtx.suspend();
+        clearInterval(progressTimer);
+        updateControls();
+      }
+
+      else if (msg.type === 'jukebox:resumed') {
+        state.paused = false;
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        startProgressTimer();
+        updateControls();
+      }
+
+      else if (msg.type === 'jukebox:skipped') {
+        stopCurrentPlayback();
       }
 
       else if (msg.type === 'jukebox:complete') {
