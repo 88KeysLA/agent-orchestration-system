@@ -97,6 +97,34 @@ function setupAudioStreamingRoutes(app) {
     }
   });
 
+  // Get Sonos system status (fed from MRX SLM)
+  app.get('/api/audio/sonos-status', async (req, res) => {
+    try {
+      if (!haClient) {
+        return res.json({ available: false });
+      }
+
+      const states = await haClient.getStates();
+      const sonosDevices = states.filter(s => 
+        s.entity_id.startsWith('media_player.') &&
+        s.entity_id.includes('sonos')
+      );
+
+      res.json({
+        available: true,
+        count: sonosDevices.length,
+        devices: sonosDevices.map(s => ({
+          entity_id: s.entity_id,
+          name: s.attributes.friendly_name,
+          state: s.state,
+          grouped: s.attributes.group_members?.length > 1
+        }))
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Pause stream
   app.post('/api/audio/stream/pause', async (req, res) => {
     if (!currentStream) {

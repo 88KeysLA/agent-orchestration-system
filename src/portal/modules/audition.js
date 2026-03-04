@@ -122,9 +122,9 @@
           <div class="dash-section">
             <h2>Output Device</h2>
             <select id="audition-device" class="audition-input">
-              <option value="media_player.anthem_740">Anthem 740 (Main)</option>
-              <option value="media_player.anthem_540">Anthem 540</option>
-              <option value="media_player.anthem_halfrack">Anthem Half-Rack</option>
+              <option value="media_player.anthem_740">Anthem 740 (Theatre)</option>
+              <option value="media_player.anthem_540">Anthem 540 (Master)</option>
+              <option value="media_player.anthem_mrx_slm">MRX SLM (Whole House via Sonos)</option>
             </select>
           </div>
 
