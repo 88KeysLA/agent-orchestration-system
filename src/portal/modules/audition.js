@@ -10,6 +10,116 @@
   let availableServices = [];
   let els = {};
   let presets = [];
+  let playlist = [];
+  let currentTrackIndex = -1;
+  let playbackState = { playing: false, track: null, position: 0 };
+
+  // Playlist management
+  function addToPlaylist(url) {
+    playlist.push({ url, codec: detectCodec(url) });
+    renderPlaylist();
+    showStatus(`Added to playlist (${playlist.length} tracks)`, false);
+  }
+
+  function removeFromPlaylist(idx) {
+    playlist.splice(idx, 1);
+    if (currentTrackIndex >= idx && currentTrackIndex > 0) {
+      currentTrackIndex--;
+    }
+    renderPlaylist();
+  }
+
+  function clearPlaylist() {
+    playlist = [];
+    currentTrackIndex = -1;
+    renderPlaylist();
+    showStatus('Playlist cleared', false);
+  }
+
+  function playPlaylist(startIdx = 0) {
+    if (playlist.length === 0) {
+      showStatus('Playlist is empty', true);
+      return;
+    }
+    currentTrackIndex = startIdx;
+    const track = playlist[currentTrackIndex];
+    const volume = parseInt(els.volumeSlider.value) / 100;
+    playURL(track.url, volume);
+    renderPlaylist();
+  }
+
+  function playNext() {
+    if (currentTrackIndex < playlist.length - 1) {
+      playPlaylist(currentTrackIndex + 1);
+    } else {
+      showStatus('End of playlist', false);
+    }
+  }
+
+  function playPrevious() {
+    if (currentTrackIndex > 0) {
+      playPlaylist(currentTrackIndex - 1);
+    }
+  }
+
+  function renderPlaylist() {
+    if (!els.playlistContainer) return;
+    
+    if (playlist.length === 0) {
+      els.playlistContainer.innerHTML = '<em>No tracks in playlist</em>';
+      return;
+    }
+
+    els.playlistContainer.innerHTML = playlist.map((track, idx) => {
+      const isCurrent = idx === currentTrackIndex;
+      return `
+        <div class="playlist-item ${isCurrent ? 'current' : ''}">
+          <span class="track-number">${idx + 1}.</span>
+          <span class="track-url">${track.url.split('/').pop()}</span>
+          <span class="track-codec">${track.codec.toUpperCase()}</span>
+          <button class="playlist-remove" data-idx="${idx}">✕</button>
+        </div>
+      `;
+    }).join('');
+
+    // Add remove listeners
+    els.playlistContainer.querySelectorAll('.playlist-remove').forEach(btn => {
+      btn.addEventListener('click', () => {
+        removeFromPlaylist(parseInt(btn.dataset.idx));
+      });
+    });
+  }
+
+  // Now playing
+  function updateNowPlaying(track, device) {
+    if (!els.nowPlaying) return;
+    
+    playbackState = {
+      playing: true,
+      track: track,
+      device: device,
+      startTime: Date.now()
+    };
+
+    const codec = detectCodec(track);
+    const deviceName = els.deviceSelect.options[els.deviceSelect.selectedIndex].text;
+    
+    els.nowPlaying.innerHTML = `
+      <div class="now-playing-info">
+        <div class="now-playing-title">🎵 ${track.split('/').pop()}</div>
+        <div class="now-playing-meta">
+          <span>Codec: ${codec.toUpperCase()}</span> • 
+          <span>Device: ${deviceName}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function clearNowPlaying() {
+    if (!els.nowPlaying) return;
+    playbackState.playing = false;
+    els.nowPlaying.innerHTML = '<em>Nothing playing</em>';
+  }
 
   // Preset management
   function loadPresets() {
@@ -127,6 +237,9 @@
       const codec = detectCodec(url);
       const spatialAudio = codec === 'atmos' || url.includes('atmos');
       const device = els.deviceSelect ? els.deviceSelect.value : 'media_player.anthem_740';
+      
+      // Update now playing
+      updateNowPlaying(url, device);
       
       // Check if streaming to all Sonos
       if (device === 'sonos_all') {
@@ -248,6 +361,27 @@
               <button id="audition-play" class="play-btn">▶ Play</button>
             </div>
             <div id="audition-status" class="status-message"></div>
+          </div>
+
+          <div class="dash-section">
+            <h2>Now Playing</h2>
+            <div id="now-playing" class="now-playing">
+              <em>Nothing playing</em>
+            </div>
+          </div>
+
+          <div class="dash-section">
+            <h2>Playlist</h2>
+            <div class="playlist-controls">
+              <button id="playlist-add" class="control-btn">➕ Add Current URL</button>
+              <button id="playlist-play" class="control-btn">▶ Play Playlist</button>
+              <button id="playlist-next" class="control-btn">⏭️ Next</button>
+              <button id="playlist-prev" class="control-btn">⏮️ Previous</button>
+              <button id="playlist-clear" class="control-btn">🗑️ Clear</button>
+            </div>
+            <div id="playlist-container" class="playlist-container">
+              <em>No tracks in playlist</em>
+            </div>
           </div>
 
           <div class="dash-section">
@@ -411,6 +545,82 @@
             font-size: 14px;
             line-height: 1.6;
           }
+          .now-playing {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            min-height: 60px;
+          }
+          .now-playing-title {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 8px;
+          }
+          .now-playing-meta {
+            font-size: 12px;
+            color: #888;
+          }
+          .playlist-controls {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 10px;
+          }
+          .playlist-container {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+          }
+          .playlist-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px;
+            margin: 5px 0;
+            background: #0a0a0a;
+            border-radius: 4px;
+            border-left: 3px solid #333;
+          }
+          .playlist-item.current {
+            border-left-color: #4CAF50;
+            background: #1a2a1a;
+          }
+          .track-number {
+            min-width: 30px;
+            color: #888;
+          }
+          .track-url {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+          }
+          .track-codec {
+            font-size: 11px;
+            color: #888;
+            min-width: 50px;
+          }
+          .playlist-remove {
+            background: none;
+            border: none;
+            color: #f44336;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 5px;
+          }
+          .playlist-remove:hover {
+            color: #ff5555;
+          }
+          .service-info {
+            background: #1a1a1a;
+            padding: 15px;
+            border-radius: 4px;
+            font-size: 14px;
+            line-height: 1.6;
+          }
           .sonos-controls {
             display: flex;
             flex-direction: column;
@@ -467,6 +677,13 @@
       els.presetLoad = document.getElementById('preset-load');
       els.presetSave = document.getElementById('preset-save');
       els.presetDelete = document.getElementById('preset-delete');
+      els.nowPlaying = document.getElementById('now-playing');
+      els.playlistContainer = document.getElementById('playlist-container');
+      els.playlistAdd = document.getElementById('playlist-add');
+      els.playlistPlay = document.getElementById('playlist-play');
+      els.playlistNext = document.getElementById('playlist-next');
+      els.playlistPrev = document.getElementById('playlist-prev');
+      els.playlistClear = document.getElementById('playlist-clear');
       els.sonosStatusBtn = document.getElementById('sonos-status-btn');
       els.sonosInfo = document.getElementById('sonos-info');
       els.playBtn = document.getElementById('audition-play');
@@ -475,6 +692,7 @@
 
       // Load presets
       loadPresets();
+      renderPlaylist();
 
       // Service switcher
       els.serviceGrid.addEventListener('click', (e) => {
@@ -520,6 +738,20 @@
       els.presetLoad.addEventListener('click', loadPreset);
       els.presetSave.addEventListener('click', savePreset);
       els.presetDelete.addEventListener('click', deletePreset);
+
+      // Playlist buttons
+      els.playlistAdd.addEventListener('click', () => {
+        const url = els.urlInput.value.trim();
+        if (!url) {
+          showStatus('Enter a URL first', true);
+          return;
+        }
+        addToPlaylist(url);
+      });
+      els.playlistPlay.addEventListener('click', () => playPlaylist(0));
+      els.playlistNext.addEventListener('click', playNext);
+      els.playlistPrev.addEventListener('click', playPrevious);
+      els.playlistClear.addEventListener('click', clearPlaylist);
 
       // Sonos status button
       els.sonosStatusBtn.addEventListener('click', async () => {
