@@ -39,6 +39,7 @@
       // Detect codec from URL
       const codec = detectCodec(url);
       const spatialAudio = codec === 'atmos' || url.includes('atmos');
+      const device = els.deviceSelect ? els.deviceSelect.value : 'media_player.anthem_740';
       
       const result = await VP.apiFetch('/api/music/play', {
         method: 'POST',
@@ -47,13 +48,15 @@
           options: { 
             volume,
             codec,
-            spatialAudio
+            spatialAudio,
+            device
           }
         })
       });
       
       const quality = spatialAudio ? 'Atmos' : codec.toUpperCase();
-      showStatus(`Playing ${quality} via ${activeService}: ${url.substring(0, 40)}...`);
+      const deviceName = device.split('.')[1].replace('_', ' ');
+      showStatus(`Playing ${quality} on ${deviceName}: ${url.substring(0, 30)}...`);
       return result;
     } catch (err) {
       showStatus(`Error: ${err.message}`, true);
@@ -116,6 +119,15 @@
             <div class="service-grid" id="audition-services"></div>
           </div>
           
+          <div class="dash-section">
+            <h2>Output Device</h2>
+            <select id="audition-device" class="audition-input">
+              <option value="media_player.anthem_740">Anthem 740 (Main)</option>
+              <option value="media_player.anthem_540">Anthem 540</option>
+              <option value="media_player.anthem_halfrack">Anthem Half-Rack</option>
+            </select>
+          </div>
+
           <div class="dash-section">
             <h2>Audition URL</h2>
             <input type="text" 
@@ -273,6 +285,7 @@
       `;
 
       els.serviceGrid = document.getElementById('audition-services');
+      els.deviceSelect = document.getElementById('audition-device');
       els.urlInput = document.getElementById('audition-url');
       els.volumeSlider = document.getElementById('audition-volume');
       els.volumeLabel = document.getElementById('audition-volume-label');
