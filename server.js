@@ -47,6 +47,7 @@ let OpenAIAgent;
 try { OpenAIAgent = require('./src/agents/openai-agent'); } catch {}
 let AgentToolkit, addHATools, addCrestronTools, addUtilityTools;
 try { ({ AgentToolkit, addHATools, addCrestronTools, addUtilityTools } = require('./src/agent-tools')); } catch {}
+const WorkerPool = require('./src/worker-pool');
 
 const HITL = require('./src/hitl');
 const { ContextManager, StaticProvider, TimeProvider } = require('./src/context-providers');
@@ -146,6 +147,14 @@ async function main() {
       redisBus = null;
     }
   }
+
+  // Initialize worker pool for CPU-intensive tasks
+  const workerPool = new WorkerPool(
+    path.join(__dirname, 'src/workers/task-worker.js'),
+    require('os').cpus().length - 1 // Leave 1 core for main thread
+  );
+  console.log(`Worker pool: ${workerPool.maxWorkers} cores available`);
+  orc.workerPool = workerPool;
 
   // Register remote agents from REMOTE_AGENTS env var (requires Redis bus)
   // Format: REMOTE_AGENTS=fx-ollama,show-runner,road-mac
@@ -586,6 +595,19 @@ Request: {task}`
   
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
   app.use(apiApp);          // API sub-app (existing routes preserved)
+
+  // Worker pool monitoring endpoint
+  app.get('/api/workers/status', (req, res) => {
+    const busyCount = workerPool.workers.filter(w => w.busy).length;
+    res.json({
+      totalWorkers: workerPool.workers.length,
+      maxWorkers: workerPool.maxWorkers,
+      busyWorkers: busyCount,
+      availableWorkers: workerPool.workers.length - busyCount,
+      queuedTasks: workerPool.queue.length,
+      cpuCores: require('os').cpus().length
+    });
+  });
 
   // Setup music service routes (Mantis + Amazon Music)
   const setupMusicServiceRoutes = require('./src/music-service-routes');
