@@ -14,6 +14,14 @@ LOG_FILE="/Users/villaromanzamech/logs/agent-orchestration.log"
 
 echo "Deploying Agent Orchestration to Mech Mac..."
 
+# Check ports first
+echo "Checking for port conflicts..."
+if ! ./check-ports.sh; then
+  echo "❌ Port check failed. Aborting deployment."
+  exit 1
+fi
+echo ""
+
 if [ "$1" = "--setup" ]; then
   echo "First-time setup..."
 
