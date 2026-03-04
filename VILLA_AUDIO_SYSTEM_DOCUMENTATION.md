@@ -20,11 +20,13 @@ Multi-zone audio streaming system with hi-fi/Atmos support via Home Assistant co
    - Connection: Network streaming via HA
    - Entity ID: `media_player.anthem_540`
 
-3. **Anthem MRX SLM** - Whole House Distribution
+3. **Anthem MRX SLM** - Whole House Distribution + Sunroom
    - Location: Mech room (with HA server)
-   - Use: Feeds entire Sonos system
+   - Use: Feeds entire Sonos system + Sunroom speakers
    - Connection: Network streaming via HA
-   - Output: Optical out → Sonos Amp #1
+   - Outputs: 
+     - Optical out → Sonos Amp #1 (whole house)
+     - Speaker outputs → Sunroom speakers (direct)
    - Entity ID: `media_player.anthem_mrx_slm`
 
 ### Sonos System (20 Amps)
@@ -48,10 +50,12 @@ Home Assistant
      ├─→ Anthem 740 (Theatre) ─→ Theatre speakers
      ├─→ Anthem 540 (Master) ─→ Master speakers
      └─→ MRX SLM (Mech Room)
-              ↓ optical digital
-         Sonos Amp #1
-              ↓ network (TruePlay synced)
-         19 other Sonos Amps → Whole house
+              ├─→ Speaker outputs → Sunroom speakers (direct)
+              └─→ Optical out
+                    ↓
+                 Sonos Amp #1
+                    ↓ network (TruePlay synced)
+                 19 other Sonos Amps → Whole house
 ```
 
 ## Supported Audio Formats
@@ -132,7 +136,7 @@ media_player.sonos_*         # 20 Sonos Amps
 2. **Select output device:**
    - Anthem 740 (Theatre) - Direct hi-fi/Atmos
    - Anthem 540 (Master) - Direct hi-fi
-   - MRX SLM (Whole House via Sonos) - Distributed audio
+   - MRX SLM (Whole House via Sonos + Sunroom) - Distributed audio
 3. **Paste audio URL** (MP3, FLAC, Atmos, etc.)
 4. **Adjust volume** (0-100%)
 5. **Click Play**

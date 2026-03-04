@@ -124,7 +124,7 @@
             <select id="audition-device" class="audition-input">
               <option value="media_player.anthem_740">Anthem 740 (Theatre)</option>
               <option value="media_player.anthem_540">Anthem 540 (Master)</option>
-              <option value="media_player.anthem_mrx_slm">MRX SLM (Whole House via Sonos)</option>
+              <option value="media_player.anthem_mrx_slm">MRX SLM (Sunroom + Whole House via Sonos)</option>
             </select>
           </div>
 
