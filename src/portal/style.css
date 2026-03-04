@@ -1675,11 +1675,10 @@ main {
   flex-shrink: 0;
 }
 
-.jukebox-visual-img {
+.jukebox-viz-canvas {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  transition: opacity 0.8s ease;
+  display: block;
 }
 
 .jukebox-track-overlay {
@@ -1922,8 +1921,7 @@ main {
   border-radius: 0;
 }
 
-.jukebox-fullscreen .jukebox-visual-img {
-  object-fit: contain;
+.jukebox-fullscreen .jukebox-viz-canvas {
   background: #000;
 }
 

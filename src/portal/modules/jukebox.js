@@ -22,6 +22,8 @@
 
   let els = {};
   let audioCtx = null;
+  let analyser = null;
+  let freqData = null;
   let currentSource = null;
   let currentBuffer = null;
   let nextBuffer = null;
@@ -36,6 +38,14 @@
   let progressTimer = null;
   let ttsQueue = Promise.resolve();
   let overlayHideTimer = null;
+
+  // WebGL visualizer state
+  let gl = null;
+  let shaderProgram = null;
+  let vizAnimFrame = null;
+  let vizStartTime = 0;
+  let vizMood = 'default';
+  let smoothBass = 0, smoothMids = 0, smoothHighs = 0, smoothEnergy = 0;
 
   const PREVIEW_DURATION = 30; // seconds
   const CROSSFADE_START = 24;  // start crossfade at 24s
@@ -57,6 +67,13 @@
     masterGain = audioCtx.createGain();
     masterGain.gain.value = 0.8;
     masterGain.connect(audioCtx.destination);
+
+    // AnalyserNode for FFT data → visuals
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.8;
+    freqData = new Uint8Array(analyser.frequencyBinCount);
+    masterGain.connect(analyser);
 
     previewGain = audioCtx.createGain();
     previewGain.gain.value = 1.0;
@@ -356,39 +373,283 @@
   }
 
   // ---------------------------------------------------------------------------
+  // WebGL Reactive Visualizer
+  // ---------------------------------------------------------------------------
+
+  const VERT_SHADER = `
+    attribute vec2 a_position;
+    void main() { gl_Position = vec4(a_position, 0.0, 1.0); }
+  `;
+
+  const FRAG_SHADER = `
+    precision mediump float;
+    uniform vec2 u_resolution;
+    uniform float u_time;
+    uniform float u_bass;
+    uniform float u_mids;
+    uniform float u_highs;
+    uniform float u_energy;
+    uniform vec3 u_color1;
+    uniform vec3 u_color2;
+    uniform vec3 u_color3;
+
+    // Hash + noise
+    float hash(vec2 p) {
+      float h = dot(p, vec2(127.1, 311.7));
+      return fract(sin(h) * 43758.5453);
+    }
+
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+
+    // Fractional Brownian Motion — organic layered noise
+    float fbm(vec2 p) {
+      float val = 0.0;
+      float amp = 0.5;
+      float freq = 1.0;
+      for (int i = 0; i < 5; i++) {
+        val += amp * noise(p * freq);
+        freq *= 2.0;
+        amp *= 0.5;
+      }
+      return val;
+    }
+
+    // IQ color palette
+    vec3 palette(float t, vec3 a, vec3 b, vec3 c, vec3 d) {
+      return a + b * cos(6.28318 * (c * t + d));
+    }
+
+    void main() {
+      vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
+      float t = u_time * 0.08;
+
+      // Domain warping — bass drives distortion intensity
+      float warp1 = fbm(uv * 2.0 + t);
+      float warp2 = fbm(uv * 2.0 + warp1 + t * 0.7);
+      vec2 warped = uv + vec2(warp1, warp2) * (0.3 + u_bass * 0.8);
+
+      // Main noise field — mids drive flow speed
+      float n = fbm(warped * (2.5 + u_mids * 1.5) + t * (0.5 + u_mids * 0.5));
+
+      // Secondary layer for depth
+      float n2 = fbm(warped * 4.0 - t * 0.3 + vec2(n * 0.5));
+
+      // Color from mood palette
+      vec3 col = palette(
+        n * 1.2 + t * 0.1 + u_bass * 0.3,
+        u_color1 * 0.5,
+        u_color2 * 0.5,
+        vec3(1.0, 1.0, 1.0),
+        u_color3
+      );
+
+      // Mix with second layer
+      vec3 col2 = palette(
+        n2 + t * 0.15,
+        u_color2 * 0.4,
+        u_color1 * 0.6,
+        vec3(0.8, 1.2, 0.9),
+        u_color3 + vec3(0.1)
+      );
+      col = mix(col, col2, 0.35 + u_energy * 0.15);
+
+      // Highs add sparkle / shimmer
+      float sparkle = noise(uv * 30.0 + t * 3.0);
+      sparkle = smoothstep(0.65, 0.95, sparkle) * u_highs;
+      col += sparkle * vec3(0.8, 0.9, 1.0) * 0.5;
+
+      // Bass pulse — subtle brightness throb
+      col *= 0.85 + u_bass * 0.25;
+
+      // Energy drives overall saturation and brightness
+      col = mix(col * 0.6, col, 0.5 + u_energy * 0.5);
+
+      // Vignette
+      float vig = 1.0 - dot(uv * 0.7, uv * 0.7);
+      col *= smoothstep(0.0, 0.7, vig);
+
+      // Subtle film grain
+      float grain = (hash(uv * u_time * 100.0) - 0.5) * 0.04;
+      col += grain;
+
+      gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
+    }
+  `;
+
+  // Mood → color palette (IQ palette vectors)
+  const MOOD_PALETTES = {
+    'chill lounge':  { c1: [0.3, 0.5, 0.7], c2: [0.4, 0.3, 0.6], c3: [0.0, 0.15, 0.4] },
+    'berlin night':  { c1: [0.1, 0.1, 0.3], c2: [0.6, 0.1, 0.4], c3: [0.5, 0.0, 0.3] },
+    'jazz cafe':     { c1: [0.6, 0.4, 0.2], c2: [0.5, 0.3, 0.2], c3: [0.1, 0.05, 0.0] },
+    'deep focus':    { c1: [0.15, 0.2, 0.4], c2: [0.2, 0.3, 0.5], c3: [0.0, 0.1, 0.3] },
+    'sunset vibes':  { c1: [0.7, 0.4, 0.2], c2: [0.6, 0.2, 0.3], c3: [0.1, 0.0, 0.2] },
+    'default':       { c1: [0.4, 0.3, 0.6], c2: [0.5, 0.3, 0.4], c3: [0.1, 0.1, 0.2] },
+  };
+
+  function getMoodPalette(mood) {
+    const m = (mood || '').toLowerCase();
+    for (const [key, pal] of Object.entries(MOOD_PALETTES)) {
+      if (m.includes(key) || key.includes(m)) return pal;
+    }
+    // Try partial matches
+    const words = m.split(/\s+/);
+    for (const w of words) {
+      if (w === 'chill' || w === 'lounge' || w === 'relax') return MOOD_PALETTES['chill lounge'];
+      if (w === 'berlin' || w === 'techno' || w === 'electronic' || w === 'dark') return MOOD_PALETTES['berlin night'];
+      if (w === 'jazz' || w === 'cafe' || w === 'bossa') return MOOD_PALETTES['jazz cafe'];
+      if (w === 'focus' || w === 'ambient' || w === 'minimal') return MOOD_PALETTES['deep focus'];
+      if (w === 'sunset' || w === 'warm' || w === 'golden') return MOOD_PALETTES['sunset vibes'];
+    }
+    return MOOD_PALETTES['default'];
+  }
+
+  function initWebGL() {
+    const canvas = els.vizCanvas;
+    if (!canvas) return false;
+    gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+    if (!gl) return false;
+
+    // Compile shaders
+    const vs = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vs, VERT_SHADER);
+    gl.compileShader(vs);
+    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
+      console.error('[Viz] Vertex shader:', gl.getShaderInfoLog(vs));
+      return false;
+    }
+
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, FRAG_SHADER);
+    gl.compileShader(fs);
+    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
+      console.error('[Viz] Fragment shader:', gl.getShaderInfoLog(fs));
+      return false;
+    }
+
+    shaderProgram = gl.createProgram();
+    gl.attachShader(shaderProgram, vs);
+    gl.attachShader(shaderProgram, fs);
+    gl.linkProgram(shaderProgram);
+    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      console.error('[Viz] Shader link:', gl.getProgramInfoLog(shaderProgram));
+      return false;
+    }
+    gl.useProgram(shaderProgram);
+
+    // Full-screen quad
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const pos = gl.getAttribLocation(shaderProgram, 'a_position');
+    gl.enableVertexAttribArray(pos);
+    gl.vertexAttribPointer(pos, 2, gl.FLOAT, false, 0, 0);
+
+    vizStartTime = performance.now() / 1000;
+    return true;
+  }
+
+  function getAudioBands() {
+    if (!analyser || !freqData) return { bass: 0, mids: 0, highs: 0, energy: 0 };
+    analyser.getByteFrequencyData(freqData);
+    const len = freqData.length; // 128 bins
+
+    // Split into 3 bands
+    let bass = 0, mids = 0, highs = 0;
+    const bassEnd = Math.floor(len * 0.15);   // ~0-300 Hz
+    const midsEnd = Math.floor(len * 0.5);    // ~300-2kHz
+    for (let i = 0; i < len; i++) {
+      const v = freqData[i] / 255;
+      if (i < bassEnd) bass += v;
+      else if (i < midsEnd) mids += v;
+      else highs += v;
+    }
+    bass /= bassEnd || 1;
+    mids /= (midsEnd - bassEnd) || 1;
+    highs /= (len - midsEnd) || 1;
+    const energy = (bass + mids + highs) / 3;
+
+    return { bass, mids, highs, energy };
+  }
+
+  function vizRenderFrame() {
+    if (!gl || !shaderProgram || !state.running) return;
+
+    // Resize canvas to match container
+    const canvas = els.vizCanvas;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.floor(rect.width * dpr);
+    const h = Math.floor(rect.height * dpr);
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      gl.viewport(0, 0, w, h);
+    }
+
+    // Get audio data
+    const bands = getAudioBands();
+    // Smooth with exponential decay for fluid motion
+    const smooth = 0.15;
+    smoothBass  += (bands.bass  - smoothBass)  * smooth;
+    smoothMids  += (bands.mids  - smoothMids)  * smooth;
+    smoothHighs += (bands.highs - smoothHighs) * smooth;
+    smoothEnergy += (bands.energy - smoothEnergy) * smooth;
+
+    const time = performance.now() / 1000 - vizStartTime;
+    const pal = getMoodPalette(vizMood);
+
+    // Set uniforms
+    const u = (name) => gl.getUniformLocation(shaderProgram, name);
+    gl.uniform2f(u('u_resolution'), w, h);
+    gl.uniform1f(u('u_time'), time);
+    gl.uniform1f(u('u_bass'), smoothBass);
+    gl.uniform1f(u('u_mids'), smoothMids);
+    gl.uniform1f(u('u_highs'), smoothHighs);
+    gl.uniform1f(u('u_energy'), smoothEnergy);
+    gl.uniform3fv(u('u_color1'), pal.c1);
+    gl.uniform3fv(u('u_color2'), pal.c2);
+    gl.uniform3fv(u('u_color3'), pal.c3);
+
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+
+    vizAnimFrame = requestAnimationFrame(vizRenderFrame);
+  }
+
+  function startVisualizer(mood) {
+    vizMood = mood || 'default';
+    if (!gl && !initWebGL()) {
+      console.log('[Viz] WebGL not available');
+      return;
+    }
+    vizStartTime = performance.now() / 1000;
+    smoothBass = smoothMids = smoothHighs = smoothEnergy = 0;
+    if (vizAnimFrame) cancelAnimationFrame(vizAnimFrame);
+    vizAnimFrame = requestAnimationFrame(vizRenderFrame);
+  }
+
+  function stopVisualizer() {
+    if (vizAnimFrame) {
+      cancelAnimationFrame(vizAnimFrame);
+      vizAnimFrame = null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Visual Display
   // ---------------------------------------------------------------------------
 
   function updateVisual(track, imageUrl) {
-    if (!els.visualImg) return;
-
-    const src = imageUrl || track?.albumArt || '';
-    if (!src) {
-      els.visualImg.style.opacity = '0';
-      return;
-    }
-
-    // Crossfade: create new image, fade it in
-    const newImg = document.createElement('img');
-    newImg.src = src;
-    newImg.className = 'jukebox-visual-img fade-in';
-    newImg.alt = track ? `${track.title} by ${track.artist}` : '';
-
-    newImg.onload = () => {
-      els.visualImg.style.opacity = '0';
-      setTimeout(() => {
-        els.visualImg.src = src;
-        els.visualImg.alt = newImg.alt;
-        els.visualImg.style.opacity = '1';
-      }, 500);
-    };
-    newImg.onerror = () => {
-      // Fall back to album art if image URL fails
-      if (src !== track?.albumArt && track?.albumArt) {
-        els.visualImg.src = track.albumArt;
-        els.visualImg.style.opacity = '1';
-      }
-    };
+    // Visuals are now driven by the WebGL shader — nothing to do here
+    // Album art is shown in the playlist, not the main display
   }
 
   function updateTrackInfo(track) {
@@ -563,6 +824,7 @@
   function showPlayer() {
     if (els.idleSection) els.idleSection.classList.add('hidden');
     if (els.playerSection) els.playerSection.classList.remove('hidden');
+    startVisualizer(vizMood);
   }
 
   function showIdle() {
@@ -572,6 +834,7 @@
     state.trackIndex = -1;
     state.tracks = [];
     stopCurrentPlayback();
+    stopVisualizer();
   }
 
   function renderPlaylist() {
@@ -677,7 +940,7 @@
         <!-- Player Section -->
         <div id="jukebox-player" class="jukebox-player hidden">
           <div class="jukebox-visual-container" id="jukebox-visual-container">
-            <img class="jukebox-visual-img" id="jukebox-visual-img" alt="">
+            <canvas id="jukebox-viz-canvas" class="jukebox-viz-canvas"></canvas>
             <div class="jukebox-track-overlay" id="jukebox-track-overlay">
               <div class="jukebox-track-title" id="jukebox-track-title"></div>
               <div class="jukebox-track-artist" id="jukebox-track-artist"></div>
@@ -726,7 +989,7 @@
     els.idleSection = document.getElementById('jukebox-idle');
     els.playerSection = document.getElementById('jukebox-player');
     els.visualContainer = document.getElementById('jukebox-visual-container');
-    els.visualImg = document.getElementById('jukebox-visual-img');
+    els.vizCanvas = document.getElementById('jukebox-viz-canvas');
     els.trackOverlay = document.getElementById('jukebox-track-overlay');
     els.trackTitle = document.getElementById('jukebox-track-title');
     els.trackArtist = document.getElementById('jukebox-track-artist');
@@ -797,6 +1060,7 @@
         state.running = true;
         state.trackIndex = -1;
         showPlayer();
+        startVisualizer(msg.mood);
         renderPlaylist();
         if (els.playlistCount) els.playlistCount.textContent = `(${state.tracks.length} tracks)`;
         updateStatus(`Session ready: ${msg.mood}`);
@@ -855,6 +1119,7 @@
       else if (msg.type === 'jukebox:complete') {
         updateStatus('Session complete');
         stopCurrentPlayback();
+        stopVisualizer();
         queueTTS('That concludes this Visual Jukebox session. I hope you enjoyed it.', 'edward');
         setTimeout(() => showIdle(), 8000);
       }

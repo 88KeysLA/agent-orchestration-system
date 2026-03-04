@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'villa-v4';
+const CACHE_VERSION = 'villa-v5';
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const API_CACHE = `${CACHE_VERSION}-api`;
 
