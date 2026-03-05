@@ -8,6 +8,8 @@
   const els = {};
   let currentJob = null;
   let currentVideo = null;
+  let autoGenerateEnabled = false;
+  let lastGeneratedTrack = null;
 
   function init() {
     els.panel = document.getElementById('panel-visuals');
@@ -15,10 +17,22 @@
 
     els.panel.innerHTML = `
       <div class="visuals-container">
-        <div class="visual-player">
+        <div class="visual-presets">
+          <button class="preset-btn" data-bpm="70" data-mood="calm">🎹 Chill Lounge</button>
+          <button class="preset-btn" data-bpm="128" data-mood="energetic">💃 Dance Party</button>
+          <button class="preset-btn" data-bpm="140" data-mood="dark">🌑 Dark Club</button>
+          <button class="preset-btn" data-bpm="120" data-mood="happy">😊 Happy Hour</button>
+          <button class="preset-btn" data-bpm="116" data-mood="energetic">🎸 Rock Energy</button>
+          <button class="preset-btn" data-bpm="93" data-mood="dark">🎤 Hip Hop</button>
+          <button class="preset-btn" data-bpm="138" data-mood="mysterious">✨ Trance</button>
+          <button class="preset-btn" data-bpm="66" data-mood="calm">🎻 Classical</button>
+        </div>
+        
+        <div class="visual-player" id="visual-player">
           <video id="visual-video" loop muted autoplay></video>
           <div class="visual-overlay">
             <div class="visual-info"></div>
+            <button class="fullscreen-btn" title="Fullscreen (double-click video)">⛶</button>
           </div>
         </div>
         
@@ -41,7 +55,7 @@
           </div>
           
           <button id="visual-generate" class="btn-primary">Generate Visual</button>
-          <button id="visual-auto" class="btn-secondary">Auto-Generate</button>
+          <button id="visual-auto" class="btn-secondary">Auto-Generate: OFF</button>
         </div>
         
         <div class="visual-status"></div>
@@ -54,16 +68,29 @@
     `;
 
     els.video = document.getElementById('visual-video');
+    els.player = document.getElementById('visual-player');
     els.bpmInput = document.getElementById('visual-bpm');
     els.moodSelect = document.getElementById('visual-mood');
     els.generateBtn = document.getElementById('visual-generate');
     els.autoBtn = document.getElementById('visual-auto');
+    els.fullscreenBtn = els.panel.querySelector('.fullscreen-btn');
     els.status = els.panel.querySelector('.visual-status');
     els.info = els.panel.querySelector('.visual-info');
     els.cacheGrid = els.panel.querySelector('.cache-grid');
 
     els.generateBtn.addEventListener('click', generateVisual);
     els.autoBtn.addEventListener('click', toggleAutoGenerate);
+    els.fullscreenBtn.addEventListener('click', toggleFullscreen);
+    els.video.addEventListener('dblclick', toggleFullscreen);
+    
+    // Preset buttons
+    els.panel.querySelectorAll('.preset-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const bpm = parseInt(btn.dataset.bpm);
+        const mood = btn.dataset.mood;
+        loadCachedVisual(bpm, mood);
+      });
+    });
 
     loadCachedVisuals();
   }
@@ -95,6 +122,48 @@
       showStatus(`Error: ${err.message}`, 'error');
       els.generateBtn.disabled = false;
     }
+  }
+
+  async function generateForTrack(track) {
+    // Avoid regenerating for same track
+    if (lastGeneratedTrack === track.title) return;
+    lastGeneratedTrack = track.title;
+
+    // Estimate BPM and mood from track metadata
+    const bpm = estimateBPM(track);
+    const mood = estimateMood(track);
+
+    els.bpmInput.value = bpm;
+    els.moodSelect.value = mood;
+
+    showStatus(`Auto-generating for: ${track.title}`, 'info');
+    await generateVisual();
+  }
+
+  function estimateBPM(track) {
+    // Try to extract BPM from track metadata
+    // Fallback to genre-based estimation
+    const genre = (track.genre || '').toLowerCase();
+    
+    if (genre.includes('ambient') || genre.includes('chill')) return 70;
+    if (genre.includes('house') || genre.includes('dance')) return 128;
+    if (genre.includes('drum') || genre.includes('bass')) return 170;
+    if (genre.includes('techno')) return 140;
+    
+    return 120; // Default
+  }
+
+  function estimateMood(track) {
+    const title = (track.title || '').toLowerCase();
+    const genre = (track.genre || '').toLowerCase();
+    
+    if (title.includes('dark') || genre.includes('dark')) return 'dark';
+    if (title.includes('happy') || genre.includes('happy')) return 'happy';
+    if (title.includes('sad') || genre.includes('sad')) return 'sad';
+    if (title.includes('chill') || genre.includes('ambient')) return 'calm';
+    if (genre.includes('dance') || genre.includes('house')) return 'energetic';
+    
+    return 'energetic'; // Default
   }
 
   async function pollJobStatus(jobId) {
@@ -166,8 +235,46 @@
   }
 
   function toggleAutoGenerate() {
-    // TODO: Hook into music player to auto-generate on track change
-    showStatus('Auto-generate not yet implemented', 'info');
+    autoGenerateEnabled = !autoGenerateEnabled;
+    els.autoBtn.textContent = `Auto-Generate: ${autoGenerateEnabled ? 'ON' : 'OFF'}`;
+    els.autoBtn.classList.toggle('btn-active', autoGenerateEnabled);
+    
+    if (autoGenerateEnabled) {
+      showStatus('Auto-generate enabled - will generate on track change', 'success');
+    } else {
+      showStatus('Auto-generate disabled', 'info');
+      lastGeneratedTrack = null;
+    }
+  }
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      els.player.requestFullscreen().catch(err => {
+        console.error('Fullscreen failed:', err);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  async function loadCachedVisual(bpm, mood) {
+    const cacheKey = `${bpm}_${mood}`;
+    
+    try {
+      const res = await fetch(`/api/visual/video/${cacheKey}`);
+      if (res.ok) {
+        loadVisual({ bpm, mood, cached: true });
+        els.bpmInput.value = bpm;
+        els.moodSelect.value = mood;
+      } else {
+        showStatus(`Visual not cached - generating...`, 'info');
+        els.bpmInput.value = bpm;
+        els.moodSelect.value = mood;
+        await generateVisual();
+      }
+    } catch (err) {
+      showStatus(`Error loading visual: ${err.message}`, 'error');
+    }
   }
 
   function showStatus(message, type = 'info') {
@@ -181,6 +288,10 @@
   }
 
   if (typeof VP !== 'undefined') {
-    VP.modules.visuals = { init };
+    VP.modules.visuals = { 
+      init,
+      generateForTrack,
+      get autoGenerateEnabled() { return autoGenerateEnabled; }
+    };
   }
 })();
