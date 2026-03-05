@@ -1076,9 +1076,11 @@
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && state.fullscreen) {
         toggleFullscreen();
-      } else if (e.key === ' ' && state.running) {
-        e.preventDefault();
-        togglePause();
+      } else if (e.key === ' ' || e.code === 'Space') {
+        if (state.running) {
+          e.preventDefault();
+          togglePause();
+        }
       }
     });
   }
