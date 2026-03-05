@@ -157,6 +157,10 @@ class IdleMonitor {
           await this.saveResearch(task, result);
           break;
           
+        case 'code-review':
+          result = await this.codeReview(task);
+          break;
+          
         case 'documentation':
           result = await this.generateDocs(task);
           break;
@@ -175,7 +179,7 @@ class IdleMonitor {
       this.stats.totalTime += duration;
       
       console.log(`[IdleMonitor] Completed in ${(duration/1000).toFixed(1)}s`);
-      console.log(`[IdleMonitor] Quality: ${result.quality?.score || 'N/A'}`);
+      console.log(`[IdleMonitor] Quality: ${result.quality?.score || result.qualityScore || 'N/A'}`);
       
       // Update TODO
       if (task.todoFile) {
@@ -185,6 +189,22 @@ class IdleMonitor {
     } catch (error) {
       console.error(`[IdleMonitor] Task failed:`, error.message);
     }
+  }
+
+  /**
+   * Run code review task
+   */
+  async codeReview(task) {
+    const CodeReviewAgent = require('./code-review-agent');
+    const reviewer = new CodeReviewAgent(this.orc);
+    
+    if (task.file) {
+      return await reviewer.reviewFile(task.file);
+    } else if (task.directory) {
+      return await reviewer.reviewDirectory(task.directory, task.options);
+    }
+    
+    throw new Error('Code review task requires file or directory');
   }
 
   /**
