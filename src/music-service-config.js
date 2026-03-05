@@ -37,10 +37,12 @@ class MusicServiceConfig {
       },
       spotify: {
         name: 'Spotify',
-        enabled: false,
+        enabled: true,
         priority: 3,
         capabilities: ['playback', 'search', 'playlists'],
-        mcpTools: []
+        mcpTools: [],
+        clientId: process.env.SPOTIFY_CLIENT_ID || '5e57282c6ea14e91896a865650d0f23e',
+        clientSecret: process.env.SPOTIFY_CLIENT_SECRET || '4ba8e2b07d914f839b619265ee121480'
       }
     };
     
