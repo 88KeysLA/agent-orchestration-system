@@ -605,6 +605,11 @@ Request: {task}`
   });
   
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
+  
+  // Visual generation routes
+  const setupVisualGenerationRoutes = require('./src/visual-generation-routes');
+  setupVisualGenerationRoutes(app);
+  
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
   // Metrics middleware

@@ -1,5 +1,7 @@
 node_modules/
 .env
+.password_hash
 *.log
-.DS_Store
+logs/
 data/
+.DS_Store

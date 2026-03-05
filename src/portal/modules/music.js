@@ -63,6 +63,11 @@
       const data = await VP.apiFetch(`/api/music/sonos/now-playing/${selectedSpeaker}`);
       nowPlaying = data;
       renderNowPlaying();
+      
+      // Trigger visual generation if auto-enabled
+      if (window.VP?.modules?.visuals?.autoGenerateEnabled && data?.track) {
+        window.VP.modules.visuals.generateForTrack(data.track);
+      }
     } catch {}
   }
 
