@@ -588,8 +588,8 @@ Request: {task}`
   
   // Check auth and redirect to login if needed
   app.use((req, res, next) => {
-    // Skip auth for login page and auth endpoints
-    if (req.path === '/login' || req.path.startsWith('/api/auth/')) {
+    // Skip auth for login page, auth endpoints, and visual assets
+    if (req.path === '/login' || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/visual/')) {
       return next();
     }
     

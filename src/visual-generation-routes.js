@@ -123,6 +123,18 @@ function setupVisualGenerationRoutes(app) {
     }
   });
   
+  // Serve local videos by name for demo
+  app.get('/api/visual/local/:name', async (req, res) => {
+    const localPath = path.join(process.env.HOME, 'visual-asset-system/output/production', `${req.params.name}_video.mp4`);
+    
+    try {
+      await fs.access(localPath);
+      res.sendFile(localPath);
+    } catch {
+      res.status(404).json({ error: 'Video not found' });
+    }
+  });
+  
   // List cached visuals
   app.get('/api/visual/cache', async (req, res) => {
     try {

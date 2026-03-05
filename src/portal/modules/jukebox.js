@@ -308,6 +308,9 @@
     bedGain.gain.cancelScheduledValues(0);
     bedGain.gain.value = 0.0;
 
+    // Update visual for new track
+    updateVisual(track);
+
     // Load and play
     try {
       if (currentBuffer && currentBuffer._trackId === track.id) {
@@ -669,10 +672,18 @@
   function updateVisual(track, imageUrl) {
     if (!track || !els.visualContainer) return;
     
-    // Use generated video if available
-    const bpm = Math.round(track.features?.tempo || 120);
-    const mood = state.mood || 'default';
-    const videoUrl = `/api/visual/video/${bpm}_${mood}`;
+    // Use local video files for demo
+    const videoMap = {
+      'chill': 'chill_lounge',
+      'energy': 'rock_energy',
+      'happy': 'pop_happy',
+      'dark': 'dark_club',
+      'calm': 'classical_calm'
+    };
+    
+    const mood = state.mood?.toLowerCase() || 'chill';
+    const videoName = videoMap[mood] || 'chill_lounge';
+    const videoUrl = `/api/visual/local/${videoName}`;
     
     // Check if video element exists, create if not
     let video = els.visualContainer.querySelector('video');
@@ -690,7 +701,6 @@
     
     video.src = videoUrl;
     video.play().catch(() => {
-      // Fallback to WebGL if video fails
       console.log('Video not available, using WebGL');
     });
   }
