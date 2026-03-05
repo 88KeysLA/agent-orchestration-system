@@ -667,8 +667,32 @@
   // ---------------------------------------------------------------------------
 
   function updateVisual(track, imageUrl) {
-    // Visuals are now driven by the WebGL shader — nothing to do here
-    // Album art is shown in the playlist, not the main display
+    if (!track || !els.visualContainer) return;
+    
+    // Use generated video if available
+    const bpm = Math.round(track.features?.tempo || 120);
+    const mood = state.mood || 'default';
+    const videoUrl = `/api/visual/video/${bpm}_${mood}`;
+    
+    // Check if video element exists, create if not
+    let video = els.visualContainer.querySelector('video');
+    if (!video) {
+      video = document.createElement('video');
+      video.style.width = '100%';
+      video.style.height = '100%';
+      video.style.objectFit = 'cover';
+      video.loop = true;
+      video.muted = true;
+      video.autoplay = true;
+      els.visualContainer.innerHTML = '';
+      els.visualContainer.appendChild(video);
+    }
+    
+    video.src = videoUrl;
+    video.play().catch(() => {
+      // Fallback to WebGL if video fails
+      console.log('Video not available, using WebGL');
+    });
   }
 
   function updateTrackInfo(track) {
