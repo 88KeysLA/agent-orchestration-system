@@ -1048,9 +1048,14 @@
     els.fullscreenBtn?.addEventListener('click', toggleFullscreen);
     els.stopBtn?.addEventListener('click', stopSession);
 
-    // ESC exits fullscreen
+    // ESC exits fullscreen, SPACE pauses/plays
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && state.fullscreen) toggleFullscreen();
+      if (e.key === 'Escape' && state.fullscreen) {
+        toggleFullscreen();
+      } else if (e.key === ' ' && state.running) {
+        e.preventDefault();
+        togglePause();
+      }
     });
   }
 
