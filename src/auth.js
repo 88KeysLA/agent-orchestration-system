@@ -19,8 +19,8 @@ const redis = new Redis({
 
 redis.connect().catch(() => {});
 
-const USERNAME = process.env.VILLA_USERNAME;
-const PASSWORD_HASH = process.env.VILLA_PASSWORD;
+const USERNAME = process.env.VILLA_USERNAME || "Matt Serletic";
+const PASSWORD_HASH = process.env.VILLA_PASSWORD || require("fs").readFileSync(".password_hash", "utf8").trim();
 
 async function createHashedPassword(plaintext) {
   return bcrypt.hash(plaintext, SALT_ROUNDS);
