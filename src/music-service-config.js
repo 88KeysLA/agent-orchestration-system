@@ -8,10 +8,16 @@ class MusicServiceConfig {
     this.services = {
       mantis: {
         name: 'Mantis',
-        enabled: false,
+        enabled: true,  // Enable by default
         priority: 1,
-        capabilities: ['playback', 'audio_control', 'local_audio'],
-        mcpTools: [] // To be populated when Mantis MCP is available
+        capabilities: ['playback', 'audio_control', 'local_audio', 'hi_res'],
+        audioQuality: {
+          codec: 'flac',
+          bitrate: 1411,  // CD quality (16-bit/44.1kHz)
+          spatialAudio: false
+        },
+        endpoint: process.env.MANTIS_URL || 'http://192.168.0.60:8406',
+        mcpTools: []
       },
       amazonMusic: {
         name: 'Amazon Music',
@@ -34,11 +40,11 @@ class MusicServiceConfig {
         enabled: false,
         priority: 3,
         capabilities: ['playback', 'search', 'playlists'],
-        mcpTools: [] // Future integration
+        mcpTools: []
       }
     };
     
-    this.activeService = null;
+    this.activeService = 'mantis';  // Default to Mantis
   }
 
   setActiveService(serviceName) {
@@ -76,6 +82,28 @@ class MusicServiceConfig {
   hasCapability(capability) {
     const service = this.getActiveService();
     return service?.capabilities.includes(capability) || false;
+  }
+
+  setAudioQuality(serviceName, quality) {
+    if (!this.services[serviceName]) {
+      throw new Error(`Unknown service: ${serviceName}`);
+    }
+    if (!this.services[serviceName].audioQuality) {
+      throw new Error(`Service ${serviceName} does not support audio quality settings`);
+    }
+    
+    const validCodecs = ['mp3', 'aac', 'flac', 'alac'];
+    if (quality.codec && !validCodecs.includes(quality.codec)) {
+      throw new Error(`Invalid codec: ${quality.codec}`);
+    }
+
+    Object.assign(this.services[serviceName].audioQuality, quality);
+    return this.services[serviceName].audioQuality;
+  }
+
+  getAudioQuality(serviceName) {
+    const service = serviceName ? this.services[serviceName] : this.getActiveService();
+    return service?.audioQuality || null;
   }
 }
 

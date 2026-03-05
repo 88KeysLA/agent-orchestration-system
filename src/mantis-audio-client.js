@@ -6,9 +6,11 @@
 const VillaClient = require('./villa-client');
 
 class MantisAudioClient {
-  constructor(villaUrl = 'http://192.168.0.60:8406') {
+  constructor(villaUrl = 'http://192.168.0.60:8406', options = {}) {
     this.villaUrl = villaUrl.replace(/\/$/, '');
-    this.villa = new VillaClient(villaUrl);
+    this.villa = new VillaClient(villaUrl, {
+      apiKey: options.apiKey || process.env.VILLA_API_KEY
+    });
   }
 
   async play(options = {}) {
@@ -60,6 +62,7 @@ class MantisAudioClient {
 
   async _fetch(path, options = {}) {
     const headers = { 'Content-Type': 'application/json', ...options.headers };
+    if (this.villa.apiKey) headers['x-api-key'] = this.villa.apiKey;
     const res = await fetch(`${this.villaUrl}${path}`, {
       ...options,
       headers

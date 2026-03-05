@@ -97,10 +97,17 @@
 
   async function loadPreview(trackId) {
     const ctx = ensureAudioContext();
-    const res = await fetch(`/api/jukebox/preview/${trackId}`, {
+    // Request Mantis for higher fidelity (FLAC if available)
+    const res = await fetch(`/api/jukebox/preview/${trackId}?mantis=true`, {
       headers: VP.headers(),
     });
     if (!res.ok) throw new Error(`Preview fetch failed: ${res.status}`);
+    
+    // Log audio source and codec for debugging
+    const source = res.headers.get('X-Audio-Source') || 'unknown';
+    const codec = res.headers.get('X-Audio-Codec') || 'unknown';
+    console.log(`[Jukebox] Loading ${trackId} from ${source} (${codec.toUpperCase()})`);
+    
     const arrayBuffer = await res.arrayBuffer();
     return ctx.decodeAudioData(arrayBuffer);
   }

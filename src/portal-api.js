@@ -636,29 +636,51 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     res.json(jukebox.getSessions());
   });
 
-  // GET /api/jukebox/preview/:trackId — CORS proxy for Spotify preview MP3
-  // Spotify removed preview_url from the API in 2024 — we scrape it from the embed page
-  const previewCache = new Map(); // trackId → previewUrl (in-memory, cleared on restart)
+  // GET /api/jukebox/preview/:trackId — Stream audio via Mantis or Spotify
+  const previewCache = new Map(); // trackId → { url, source } (in-memory, cleared on restart)
   app.get('/api/jukebox/preview/:trackId', portalAuth, async (req, res) => {
     try {
       const trackId = req.params.trackId;
+      const preferMantis = req.query.mantis === 'true';
 
       // 1. Check cache
-      let previewUrl = previewCache.get(trackId);
+      let cached = previewCache.get(trackId);
 
-      // 2. Try API first (some tracks still have it)
-      if (!previewUrl && musicService) {
+      // 2. Try Mantis first if preferred (higher fidelity)
+      if (preferMantis && !cached) {
+        try {
+          const mantisUrl = `http://192.168.0.60:8406/api/music/stream/${trackId}`;
+          const headers = {};
+          if (process.env.VILLA_API_KEY) {
+            headers['x-api-key'] = process.env.VILLA_API_KEY;
+          }
+          const mantisRes = await fetch(mantisUrl, { 
+            method: 'HEAD',
+            headers,
+            signal: AbortSignal.timeout(3000) 
+          });
+          if (mantisRes.ok) {
+            cached = { url: mantisUrl, source: 'mantis', codec: 'flac' };
+            previewCache.set(trackId, cached);
+          }
+        } catch {}
+      }
+
+      // 3. Fall back to Spotify preview
+      if (!cached && musicService) {
         const spotifyAdapter = musicService.adapters?.get('spotify');
         if (spotifyAdapter) {
           try {
             const data = await spotifyAdapter._apiGet(`/tracks/${trackId}`);
-            if (data.preview_url) previewUrl = data.preview_url;
+            if (data.preview_url) {
+              cached = { url: data.preview_url, source: 'spotify', codec: 'mp3' };
+            }
           } catch {}
         }
       }
 
-      // 3. Fall back to embed page scraping
-      if (!previewUrl) {
+      // 4. Scrape Spotify embed as last resort
+      if (!cached) {
         try {
           const embedRes = await fetch(`https://open.spotify.com/embed/track/${trackId}`, {
             headers: { 'User-Agent': 'Mozilla/5.0' },
@@ -667,28 +689,39 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
           if (embedRes.ok) {
             const html = await embedRes.text();
             const match = html.match(/"audioPreview":\s*\{\s*"url"\s*:\s*"([^"]+)"/);
-            if (match) previewUrl = match[1];
+            if (match) {
+              cached = { url: match[1], source: 'spotify', codec: 'mp3' };
+            }
           }
         } catch {}
       }
 
-      if (!previewUrl) return res.status(404).json({ error: 'No preview available for this track' });
+      if (!cached) return res.status(404).json({ error: 'No preview available for this track' });
 
       // Cache it
-      previewCache.set(trackId, previewUrl);
+      previewCache.set(trackId, cached);
       if (previewCache.size > 500) {
-        // Evict oldest entries
         const keys = Array.from(previewCache.keys());
         for (let i = 0; i < 100; i++) previewCache.delete(keys[i]);
       }
 
-      // Proxy the MP3
-      const upstream = await fetch(previewUrl, { signal: AbortSignal.timeout(15000) });
-      if (!upstream.ok) return res.status(upstream.status).json({ error: 'Preview fetch failed' });
+      // Proxy the audio
+      const headers = {};
+      if (cached.source === 'mantis' && process.env.VILLA_API_KEY) {
+        headers['x-api-key'] = process.env.VILLA_API_KEY;
+      }
+      const upstream = await fetch(cached.url, { 
+        headers,
+        signal: AbortSignal.timeout(15000) 
+      });
+      if (!upstream.ok) return res.status(upstream.status).json({ error: 'Stream fetch failed' });
 
-      res.setHeader('Content-Type', 'audio/mpeg');
+      const contentType = cached.codec === 'flac' ? 'audio/flac' : 'audio/mpeg';
+      res.setHeader('Content-Type', contentType);
       res.setHeader('Cache-Control', 'public, max-age=3600');
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Audio-Source', cached.source);
+      res.setHeader('X-Audio-Codec', cached.codec);
 
       const buffer = Buffer.from(await upstream.arrayBuffer());
       res.send(buffer);

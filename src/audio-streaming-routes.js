@@ -351,6 +351,50 @@ function setupAudioStreamingRoutes(app) {
       }
     });
   });
+
+  // Mantis music streaming proxy (hi-fi passthrough)
+  app.get('/api/music/stream/:trackId', async (req, res) => {
+    try {
+      const { trackId } = req.params;
+      const { codec = 'flac', bitrate = 1411 } = req.query;
+
+      // Forward to Mantis service
+      const mantisUrl = process.env.MANTIS_URL || 'http://192.168.0.60:8406';
+      const streamUrl = `${mantisUrl}/api/music/stream/${trackId}?codec=${codec}&bitrate=${bitrate}`;
+
+      const headers = { 'Content-Type': 'application/json' };
+      if (process.env.VILLA_API_KEY) {
+        headers['x-api-key'] = process.env.VILLA_API_KEY;
+      }
+
+      const upstream = await fetch(streamUrl, {
+        headers,
+        signal: AbortSignal.timeout(30000)
+      });
+
+      if (!upstream.ok) {
+        return res.status(upstream.status).json({ 
+          error: 'Mantis stream unavailable',
+          trackId,
+          mantisStatus: upstream.status
+        });
+      }
+
+      // Stream with proper headers
+      const contentType = upstream.headers.get('content-type') || 'audio/flac';
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Audio-Source', 'mantis');
+      res.setHeader('X-Audio-Codec', codec);
+      res.setHeader('X-Audio-Bitrate', bitrate);
+
+      // Pipe the stream
+      upstream.body.pipe(res);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 }
 
 function detectCodec(url) {
