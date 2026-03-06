@@ -1,6 +1,6 @@
 /**
  * Villa Router — Deterministic task routing for Villa Romanza agents
- * Replaces Kiro's meta-agent-router.js
+ * * Villa-specific deterministic task router
  *
  * Routes are explicit pattern matches against actual registered agents.
  * RL is only used as a tiebreaker when multiple agents match equally.

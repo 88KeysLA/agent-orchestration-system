@@ -5,8 +5,8 @@
  * Usage:
  *   const bus = new RedisBus({ host: '192.168.0.60' });
  *   await bus.connect();
- *   bus.subscribe('kiro', 'ai.updates', (msg) => console.log(msg));
- *   bus.publish('ai.updates', { text: 'hello Claude' }, 'kiro');
+ *   bus.subscribe("villa", "ai.updates', (msg) => console.log(msg));
+ *   bus.publish('ai.updates', { text: 'hello' }, 'villa');
  */
 const Redis = require('ioredis');
 

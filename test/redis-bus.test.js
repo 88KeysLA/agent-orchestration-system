@@ -54,7 +54,7 @@ async function run() {
     const bus = new RedisBus({ namespace: 'test' });
     await bus.connect();
     let received = null;
-    bus.subscribe('kiro', 'ai.updates', (payload) => { received = payload; });
+    bus.subscribe('villa', 'ai.updates', (payload) => { received = payload; });
     await new Promise(r => setTimeout(r, 10));
     bus.publish('ai.updates', { text: 'hello from claude' }, 'claude');
     await new Promise(r => setTimeout(r, 20));
@@ -66,7 +66,7 @@ async function run() {
     const bus = new RedisBus({ namespace: 'test2' });
     await bus.connect();
     let count = 0;
-    bus.subscribe('kiro', 'events', () => count++);
+    bus.subscribe('villa', 'events', () => count++);
     bus.subscribe('claude', 'events', () => count++);
     await new Promise(r => setTimeout(r, 10));
     bus.publish('events', { type: 'task.done' }, 'system');
@@ -94,7 +94,7 @@ async function run() {
     const bus = new RedisBus({ namespace: 'test3' });
     await bus.connect();
     let meta = null;
-    bus.subscribe('kiro', 'tasks', (payload, msg) => { meta = msg; });
+    bus.subscribe('villa', 'tasks', (payload, msg) => { meta = msg; });
     await new Promise(r => setTimeout(r, 10));
     bus.publish('tasks', { task: 'build feature' }, 'claude');
     await new Promise(r => setTimeout(r, 20));
@@ -105,25 +105,25 @@ async function run() {
   });
 
   await test('Two buses communicate (cross-process simulation)', async () => {
-    const kiro = new RedisBus({ namespace: 'collab' });
+    const villa = new RedisBus({ namespace: 'collab' });
     const claude = new RedisBus({ namespace: 'collab' });
-    await kiro.connect();
+    await villa.connect();
     await claude.connect();
 
-    let kiroReceived = null;
+    let villaReceived = null;
     let claudeReceived = null;
 
-    kiro.subscribe('kiro', 'ai.chat', (payload) => { kiroReceived = payload; });
+    villa.subscribe('villa', 'ai.chat', (payload) => { villaReceived = payload; });
     claude.subscribe('claude', 'ai.chat', (payload) => { claudeReceived = payload; });
 
     await new Promise(r => setTimeout(r, 10));
-    claude.publish('ai.chat', { from: 'claude', msg: 'Hey Kiro!' }, 'claude');
-    kiro.publish('ai.chat', { from: 'kiro', msg: 'Hey Claude!' }, 'kiro');
+    claude.publish('ai.chat', { from: 'claude', msg: 'Hey Villa!' }, 'claude');
+    villa.publish('ai.chat', { from: 'villa', msg: 'Hey Claude!' }, 'villa');
     await new Promise(r => setTimeout(r, 30));
 
-    if (!kiroReceived) throw new Error('Kiro did not receive');
+    if (!villaReceived) throw new Error('Villa did not receive');
     if (!claudeReceived) throw new Error('Claude did not receive');
-    await kiro.disconnect();
+    await villa.disconnect();
     await claude.disconnect();
   });
 
@@ -143,14 +143,14 @@ async function run() {
   await test('Self-exclusion: other agent still receives', async () => {
     const bus = new RedisBus({ namespace: 'test-self2' });
     await bus.connect();
-    let kiroReceived = false;
+    let villaReceived = false;
     let claudeReceived = false;
-    bus.subscribe('kiro', 'updates', () => { kiroReceived = true; });
+    bus.subscribe('villa', 'updates', () => { villaReceived = true; });
     bus.subscribe('claude', 'updates', () => { claudeReceived = true; });
     await new Promise(r => setTimeout(r, 10));
     bus.publish('updates', { text: 'hello' }, 'claude');
     await new Promise(r => setTimeout(r, 30));
-    if (!kiroReceived) throw new Error('Other agent did not receive');
+    if (!villaReceived) throw new Error('Other agent did not receive');
     if (claudeReceived) throw new Error('Sender received own message');
     await bus.disconnect();
   });

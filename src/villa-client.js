@@ -1,7 +1,7 @@
 /**
  * VillaClient - Dispatch tasks to the Villa Romanza orchestrator from any machine
  *
- * Designed for Amazon1-Mac: one-way outbound only, no credentials shared,
+ * One-way outbound dispatch, no credentials shared,
  * you control exactly what task text crosses the boundary.
  *
  * Usage:
