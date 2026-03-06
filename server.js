@@ -181,30 +181,25 @@ async function main() {
     }
   }
 
-  // Register Claude agent if API key available
+  // Raw Claude agent — NOT registered (claude-tools subsumes it)
+  // Kept as local var for healthCheck dependency
+  let _rawClaude = null;
   if (ClaudeAPIAgent && process.env.ANTHROPIC_API_KEY) {
-    const claude = new ClaudeAPIAgent({
+    _rawClaude = new ClaudeAPIAgent({
       systemPrompt: process.env.CLAUDE_SYSTEM_PROMPT || VILLA_SYSTEM_PROMPT,
       maxTokens: parseInt(process.env.CLAUDE_MAX_TOKENS) || 4096
     });
-    orc.registerAgent('claude', '1.0.0', claude, {
-      type: 'cloud', provider: 'anthropic',
-      strengths: ['complex reasoning', 'code generation', 'analysis']
-    });
-    console.log('Registered: claude (Anthropic API)');
+    console.log('Loaded: claude (available for tools agent)');
   }
 
-  // Register Gemini agent if API key available
+  // Raw Gemini agent — NOT registered (gemini-tools subsumes it)
+  let _rawGemini = null;
   if (GeminiAgent && process.env.GEMINI_API_KEY) {
-    const gemini = new GeminiAgent({
+    _rawGemini = new GeminiAgent({
       systemPrompt: VILLA_SYSTEM_PROMPT,
       maxTokens: 8192
     });
-    orc.registerAgent('gemini', '1.0.0', gemini, {
-      type: 'cloud', provider: 'google',
-      strengths: ['long context', 'code generation', 'analysis', 'multimodal', 'app development']
-    });
-    console.log('Registered: gemini (Google Gemini API)');
+    console.log('Loaded: gemini (available for tools agent)');
   }
 
   // Register Imagen agent if Gemini API key available
@@ -221,22 +216,14 @@ async function main() {
     console.log('Registered: imagen (Google Imagen 4 + Gemini native image gen)');
   }
 
-  // Register ChatGPT agent if OpenAI API key available
+  // Raw ChatGPT agent — NOT registered (chatgpt-tools subsumes it)
+  let _rawChatgpt = null;
   if (OpenAIAgent && process.env.OPENAI_API_KEY) {
-    const chatgpt = new OpenAIAgent({
+    _rawChatgpt = new OpenAIAgent({
       systemPrompt: VILLA_SYSTEM_PROMPT,
       maxTokens: 4096
     });
-    const healthy = await chatgpt.healthCheck();
-    if (healthy) {
-      orc.registerAgent('chatgpt', '1.0.0', chatgpt, {
-        type: 'cloud', provider: 'openai',
-        strengths: ['creative writing', 'conversation', 'general knowledge', 'voice scripts']
-      });
-      console.log('Registered: chatgpt (OpenAI API)');
-    } else {
-      console.log('Skipped: chatgpt (OpenAI API unreachable)');
-    }
+    console.log('Loaded: chatgpt (available for tools agent)');
   }
 
   // Register Ollama agent if host is reachable
@@ -278,8 +265,8 @@ async function main() {
     }
   }
 
-  // Register compound RAG→Ollama agent if both are available
-  if (CompoundAgent && orc.agents.has('rag') && orc.agents.has('ollama')) {
+  // rag-ollama REMOVED — rag + ollama available separately
+  if (false) { // DISABLED
     const ragOllama = new CompoundAgent([
       { name: 'rag-retrieval', agent: orc.agents.get('rag') },
       {
@@ -423,7 +410,7 @@ Request: {task}`
   }
 
   // Register tool-using ChatGPT agent
-  if (sharedToolkit && OpenAIAgent && process.env.OPENAI_API_KEY && orc.agents.has('chatgpt')) {
+  if (sharedToolkit && OpenAIAgent && process.env.OPENAI_API_KEY) {
     const chatgptTools = new OpenAIAgent({
       systemPrompt: CLAUDE_TOOLS_PROMPT,
       maxTokens: 4096,
@@ -492,6 +479,19 @@ Request: {task}`
     overrideDetector.startPolling(10000);
     orc.overrideDetector = overrideDetector;
     console.log('Mood: override detector active (10s poll, 5min window)');
+  }
+
+  // HA Bridge — bidirectional connection between HA automations and Agent Orchestration
+  const HABridge = require('./src/ha-bridge');
+  if (process.env.HA_TOKEN) {
+    const bridge = new HABridge({
+      haUrl: process.env.HA_URL || 'http://192.168.1.6:8123',
+      token: process.env.HA_TOKEN,
+      orchestrator: orc,
+      intentResolverUrl: process.env.INTENT_RESOLVER_URL
+    });
+    bridge.start();
+    orc.haBridge = bridge;
   }
 
   // Load plugins from plugins/ directory
@@ -592,8 +592,15 @@ Request: {task}`
     if (req.path === '/login' || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/visual/')) {
       return next();
     }
-    
-    // Check if authenticated
+
+    // Allow Bearer token auth (PORTAL_KEY) for API routes — enables programmatic access
+    const portalKey = process.env.PORTAL_KEY;
+    if (portalKey && req.path.startsWith('/api/')) {
+      const bearer = req.headers.authorization?.replace('Bearer ', '') || req.query.token;
+      if (bearer === portalKey) return next();
+    }
+
+    // Check session cookie auth
     const sessionId = req.cookies?.villa_session;
     if (!sessionId) {
       if (req.path.startsWith('/api/')) {

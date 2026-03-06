@@ -10,10 +10,13 @@ const SALT_ROUNDS = 10;
 const SESSION_TTL = 86400; // 24 hours in seconds
 const SESSION_PREFIX = 'session:';
 
+// Parse password from REDIS_URL if set, fall back to REDIS_PASSWORD env
+const _redisUrl = process.env.REDIS_URL;
+const _redisParsed = _redisUrl ? new URL(_redisUrl) : null;
 const redis = new Redis({
-  host: process.env.REDIS_HOST || '192.168.0.60',
-  port: parseInt(process.env.REDIS_PORT, 10) || 6379,
-  password: process.env.REDIS_PASSWORD || undefined,
+  host: _redisParsed?.hostname || process.env.REDIS_HOST || '192.168.0.60',
+  port: parseInt(_redisParsed?.port || process.env.REDIS_PORT, 10) || 6379,
+  password: _redisParsed?.password || process.env.REDIS_PASSWORD || undefined,
   lazyConnect: true
 });
 

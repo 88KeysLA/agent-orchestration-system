@@ -98,13 +98,10 @@ function addHATools(toolkit, options = {}) {
       required: ['domain', 'service', 'data']
     },
     async ({ domain, service, data }) => {
-      const entityId = data.entity_id || '';
-      if (/master/i.test(entityId) && domain === 'light') return 'BLOCKED: Master suite lights excluded from agent control';
-      if (/security/i.test(entityId)) return 'BLOCKED: Security entities excluded from agent control';
-      if (/garage/i.test(entityId)) return 'BLOCKED: Garage entities excluded (Hard Rule 4)';
-      if (/laundry/i.test(entityId)) return 'BLOCKED: Laundry entities excluded (Hard Rule 4)';
-      if (['sensor', 'binary_sensor'].includes(domain)) return `BLOCKED: ${domain} is read-only`;
-      if (data.volume_level !== undefined && data.volume_level > 0.7) data.volume_level = 0.7;
+      const { gateway } = require('./safety-gateway');
+      const entityId = data.entity_id || `${domain}.unknown`;
+      const check = gateway.check('write', entityId, data);
+      if (!check.allowed) return `BLOCKED: ${check.reason}`;
 
       await haFetch(`/api/services/${domain}/${service}`, {
         method: 'POST',

@@ -6,68 +6,16 @@
 
 const VALID_MODES = ['NORMAL', 'LISTEN', 'LOOK', 'WATCH', 'ENTERTAIN', 'LIVE_JAM', 'SHOW', 'INTERLUDE'];
 
+// HASafetyGate delegates to the shared SafetyGateway (single source of truth)
+const { gateway: sharedGateway } = require('../safety-gateway');
+
 class HASafetyGate {
   constructor(overrides = {}) {
-    this.rules = {
-      light: { write: true, excludePatterns: [/master/i, /security/i] },
-      media_player: { write: true, maxVolume: 0.7 },
-      input_select: { write: true, allowedEntities: ['input_select.villa_mode'] },
-      input_boolean: { write: true, allowedPatterns: [/agent_controlled/i, /mood_time/i] },
-      input_number: { write: true, allowedPatterns: [/agent_controlled/i, /mood_time/i] },
-      sensor: { write: false },
-      binary_sensor: { write: false },
-      switch: { write: true, excludePatterns: [/garage/i, /laundry/i] },
-      script: { write: true },
-      scene: { write: true },
-      ...overrides
-    };
+    this.gateway = overrides._gateway || sharedGateway;
   }
 
   check(operation, entityId, data) {
-    const domain = entityId.split('.')[0];
-    const rule = this.rules[domain];
-
-    // Read operations always allowed
-    if (operation === 'read') return { allowed: true };
-
-    // Unknown domain blocked
-    if (!rule) return { allowed: false, reason: `Domain '${domain}' not in safety allowlist` };
-
-    // Read-only domains
-    if (!rule.write) return { allowed: false, reason: `Domain '${domain}' is read-only` };
-
-    // Exclude patterns (master suite, security, garage, laundry)
-    if (rule.excludePatterns) {
-      for (const pattern of rule.excludePatterns) {
-        if (pattern.test(entityId)) {
-          return { allowed: false, reason: `Entity '${entityId}' excluded by safety rule: ${pattern}` };
-        }
-      }
-    }
-
-    // Allowed entities whitelist
-    if (rule.allowedEntities) {
-      if (!rule.allowedEntities.includes(entityId)) {
-        return { allowed: false, reason: `Entity '${entityId}' not in allowed list for ${domain}` };
-      }
-    }
-
-    // Allowed patterns whitelist
-    if (rule.allowedPatterns) {
-      const matches = rule.allowedPatterns.some(p => p.test(entityId));
-      if (!matches) {
-        return { allowed: false, reason: `Entity '${entityId}' does not match allowed patterns for ${domain}` };
-      }
-    }
-
-    // Volume cap for media_player
-    if (domain === 'media_player' && rule.maxVolume && data) {
-      if (data.volume_level !== undefined && data.volume_level > rule.maxVolume) {
-        data.volume_level = rule.maxVolume;
-      }
-    }
-
-    return { allowed: true };
+    return this.gateway.check(operation, entityId, data);
   }
 }
 

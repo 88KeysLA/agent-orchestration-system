@@ -770,6 +770,28 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     }
   });
 
+  // --- HA Bridge endpoints ---
+  // POST /api/bridge/intent — Trigger mood intent via agent orchestration → intent resolver
+  app.post('/api/bridge/intent', portalAuth, async (req, res) => {
+    const { room, intent } = req.body;
+    if (!room || !intent) return res.status(400).json({ error: 'room and intent required' });
+    const bridge = orchestrator.haBridge;
+    if (!bridge) return res.status(503).json({ error: 'HA Bridge not available' });
+    const result = await bridge.triggerIntent(room, intent);
+    res.json(result);
+  });
+
+  // POST /api/bridge/mode — Set villa mode via bridge
+  app.post('/api/bridge/mode', portalAuth, async (req, res) => {
+    const { mode } = req.body;
+    const VALID = ['NORMAL','LISTEN','LOOK','WATCH','ENTERTAIN','LIVE_JAM','SHOW','INTERLUDE'];
+    if (!mode || !VALID.includes(mode)) return res.status(400).json({ error: 'Invalid mode', valid: VALID });
+    const bridge = orchestrator.haBridge;
+    if (!bridge) return res.status(503).json({ error: 'HA Bridge not available' });
+    const result = await bridge.setMode(mode);
+    res.json(result);
+  });
+
   return { demo, jukebox };
 }
 

@@ -24,13 +24,13 @@ class DistributedPool {
           taskId: msg.taskId,
           nodeId: this.nodeId,
           result
-        });
+        }, this.nodeId);
       } catch (error) {
         await this.bus.publish('task:response', {
           taskId: msg.taskId,
           nodeId: this.nodeId,
           error: error.message
-        });
+        }, this.nodeId);
       }
     });
 
@@ -65,7 +65,7 @@ class DistributedPool {
         hostname: require('os').hostname(),
         cores: require('os').cpus().length,
         load: require('os').loadavg()[0]
-      });
+      }, this.nodeId);
     };
 
     await sendHeartbeat();
@@ -91,7 +91,7 @@ class DistributedPool {
         task,
         targetNode,
         sourceNode: this.nodeId
-      });
+      }, this.nodeId);
     });
   }
 

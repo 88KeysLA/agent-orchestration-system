@@ -13,7 +13,7 @@ const Explainer = require('./explainer');
 const DynamicReplanner = require('./replanner');
 const Saga = require('./saga');
 const AgentComposer = require('./composer');
-const { analyzeTask, selectAgents, generateWorkflow } = require('./meta-agent-router');
+const { analyzeTask, routeTask, selectAgents, generateWorkflow } = require('./villa-router');
 
 class Orchestrator {
   constructor(options = {}) {
@@ -294,53 +294,24 @@ class Orchestrator {
   }
 
   _selectAgent(contextKey, candidates, analysis, taskDescription, contextSnapshot) {
-    // Direct routing: tasks with explicit agent prefix bypass RL
-    if (taskDescription) {
-      const prefixMatch = taskDescription.match(/^([\w-]+):/);
-      if (prefixMatch) {
-        const prefix = prefixMatch[1].toLowerCase();
-        if (candidates.includes(prefix)) return prefix;
-      }
-    }
+    // 1. Deterministic routing via villa-router (handles prefix + pattern matching)
+    const routed = routeTask(taskDescription, candidates);
+    if (routed) return routed;
 
-    // If RL has learned data for this context, defer to RL
+    // 2. If RL has learned data for this context, use it
     const hasData = candidates.some(c => this.rl.getQ(contextKey, c) > 0);
     if (hasData) {
       return this.rl.selectAgent(contextKey, candidates);
     }
 
-    // No RL data yet — cold start
-    if (Math.random() < this.rl.epsilon) {
-      return candidates[Math.floor(Math.random() * candidates.length)];
-    }
-
-    // Context bias hook: let caller steer cold-start based on snapshot
+    // 3. Context bias hook for cold-start
     if (this.contextBiasFn && contextSnapshot) {
       const biased = this.contextBiasFn(candidates, contextSnapshot, this._agentMeta);
       if (biased && candidates.includes(biased)) return biased;
     }
 
-    // Fallback: strength affinity matching
-    let best = candidates[0];
-    let bestScore = 0;
-    const taskWords = `${analysis.taskType} ${analysis.domain} ${analysis.urgency} ${taskDescription || ''}`.toLowerCase();
-
-    for (const name of candidates) {
-      const meta = this._agentMeta.get(name) || {};
-      const strengths = meta.strengths || [];
-      let score = 0;
-      for (const s of strengths) {
-        const words = s.toLowerCase().split(/\s+/);
-        for (const w of words) {
-          if (w.length >= 3 && taskWords.includes(w)) score++;
-        }
-      }
-      if (score > bestScore) {
-        bestScore = score;
-        best = name;
-      }
-    }
-    return best;
+    // 4. Fallback: first candidate (deterministic, no randomness)
+    return candidates[0];
   }
 
   getTask(taskId) {
@@ -392,14 +363,21 @@ class Orchestrator {
   }
 }
 
-function defaultReward(result) {
+function defaultReward(result, metadata) {
   if (!result) return 10;
-  const len = typeof result === 'string' ? result.length : JSON.stringify(result).length;
-  if (len < 10) return 20;
-  if (len < 50) return 50;
-  if (len < 200) return 80;
-  if (len < 1000) return 100;
-  return 70;
+  // Base reward for successful completion
+  let reward = 70;
+  // Bonus for fast execution (<2s = +20, <5s = +10)
+  if (metadata && metadata.duration) {
+    if (metadata.duration < 2000) reward += 20;
+    else if (metadata.duration < 5000) reward += 10;
+    else if (metadata.duration > 30000) reward -= 20;
+  }
+  // Penalty for error-like responses
+  const text = typeof result === 'string' ? result : JSON.stringify(result);
+  if (/error|failed|blocked|refused|exception/i.test(text)) reward -= 30;
+  if (/BLOCKED:/i.test(text)) reward = 10; // Safety block = low reward
+  return Math.max(0, Math.min(100, reward));
 }
 
 module.exports = Orchestrator;

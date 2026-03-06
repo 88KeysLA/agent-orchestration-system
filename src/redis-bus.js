@@ -19,9 +19,11 @@ class RedisBus {
     this._sub = null;
     this._connected = false;
     this.maxMessageSize = options.maxMessageSize || 1024 * 1024; // 1MB
+    // Parse password from URL (ioredis may not extract it when options obj is also passed)
+    const parsed = new URL(this.redisUrl);
     this.redisOptions = {
       lazyConnect: true,
-      password: options.password || process.env.REDIS_PASSWORD,
+      password: options.password || parsed.password || process.env.REDIS_PASSWORD || undefined,
       maxRetriesPerRequest: 3,
       enableReadyCheck: true
     };
