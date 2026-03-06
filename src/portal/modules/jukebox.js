@@ -670,39 +670,15 @@
   // ---------------------------------------------------------------------------
 
   function updateVisual(track, imageUrl) {
-    if (!track || !els.visualContainer) return;
-    
-    // Use local video files for demo
-    const videoMap = {
-      'chill': 'chill_lounge',
-      'energy': 'rock_energy',
-      'happy': 'pop_happy',
-      'dark': 'dark_club',
-      'calm': 'classical_calm'
-    };
-    
-    const mood = state.mood?.toLowerCase() || 'chill';
-    const videoName = videoMap[mood] || 'chill_lounge';
-    const videoUrl = `/api/visual/local/${videoName}`;
-    
-    // Check if video element exists, create if not
-    let video = els.visualContainer.querySelector('video');
-    if (!video) {
-      video = document.createElement('video');
-      video.style.width = '100%';
-      video.style.height = '100%';
-      video.style.objectFit = 'cover';
-      video.loop = true;
-      video.muted = true;
-      video.autoplay = true;
-      els.visualContainer.innerHTML = '';
-      els.visualContainer.appendChild(video);
+    if (!track) return;
+    // Update mood palette for WebGL shader
+    const url = imageUrl || track._imageUrl;
+    if (url && els.visualContainer) {
+      // Overlay Imagen art behind the WebGL canvas (canvas is transparent-ish via shader)
+      els.visualContainer.style.backgroundImage = `url(${url})`;
+      els.visualContainer.style.backgroundSize = 'cover';
+      els.visualContainer.style.backgroundPosition = 'center';
     }
-    
-    video.src = videoUrl;
-    video.play().catch(() => {
-      console.log('Video not available, using WebGL');
-    });
   }
 
   function updateTrackInfo(track) {

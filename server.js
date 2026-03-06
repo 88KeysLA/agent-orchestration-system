@@ -578,8 +578,8 @@ Request: {task}`
   
   // Check auth and redirect to login if needed
   app.use((req, res, next) => {
-    // Skip auth for login page, auth endpoints, and visual assets
-    if (req.path === '/login' || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/visual/')) {
+    // Skip auth for login page and auth endpoints
+    if (req.path === '/login' || req.path.startsWith('/api/auth/')) {
       return next();
     }
 
@@ -602,10 +602,6 @@ Request: {task}`
   });
   
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
-  
-  // Visual generation routes
-  const setupVisualGenerationRoutes = require('./src/visual-generation-routes');
-  setupVisualGenerationRoutes(app);
   
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
@@ -682,34 +678,10 @@ Request: {task}`
     res.json(response);
   });
 
-  // Setup music service routes (Mantis + Amazon Music)
-  const setupMusicServiceRoutes = require('./src/music-service-routes');
-  const musicConfig = require('./src/music-service-config');
-  musicConfig.enableService('mantis');  // Enable Mantis by default (priority 1)
-  setupMusicServiceRoutes(app, null); // MCP client can be added later
-  console.log('Music service routes: enabled (Mantis priority 1)');
-
-  // Setup audio streaming routes (hi-fi/Atmos support)
-  const setupAudioStreamingRoutes = require('./src/audio-streaming-routes');
-  setupAudioStreamingRoutes(app);
-  console.log('Audio streaming API: enabled (hi-fi/Atmos capable)');
-
   const server = app.listen(port, () => {
     console.log(`\nVilla Romanza Agent Orchestration API on port ${port}`);
     console.log(`Portal: http://localhost:${port}/`);
     console.log(`Agents: ${Array.from(orc.agents.keys()).join(', ')}`);
-    console.log(`\nEndpoints:`);
-    console.log(`  GET  /                - Villa Portal`);
-    console.log(`  WS   /ws             - WebSocket (chat + events)`);
-    console.log(`  POST /api/chat       - Chat with agents`);
-    console.log(`  POST /api/tasks      - Execute a task`);
-    console.log(`  GET  /api/villa/state - Villa state`);
-    console.log(`  GET  /api/images     - Generated images`);
-    console.log(`  GET  /api/agents     - List agents`);
-    console.log(`  GET  /api/rl-stats   - RL learning state`);
-    console.log(`  GET  /api/music/services - Music service config`);
-    console.log(`  POST /api/music/play - Play audio (Mantis/Amazon)`);
-    console.log(`  POST /api/audio/stream - Hi-fi audio streaming (Atmos capable)`);
   });
 
   const wss = setupWebSocket(server, orc, engines, { generationManager: genManager });

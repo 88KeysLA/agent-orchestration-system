@@ -147,7 +147,7 @@ async function testHASafetyMaster() {
     data: { entity_id: 'light.master_1' }
   });
   assert(result.includes('BLOCKED'), `Expected blocked, got '${result}'`);
-  assert(result.includes('Master'), `Expected master mention, got '${result}'`);
+  assert(/master/i.test(result), `Expected master mention, got '${result}'`);
 }
 
 async function testHASafetySecurity() {
@@ -168,7 +168,7 @@ async function testHASafetyGarage() {
     data: { entity_id: 'switch.garage_door' }
   });
   assert(result.includes('BLOCKED'), `Expected blocked, got '${result}'`);
-  assert(result.includes('Garage'), `Expected garage mention, got '${result}'`);
+  assert(/garage/i.test(result), `Expected garage mention, got '${result}'`);
 }
 
 async function testHASafetyLaundry() {

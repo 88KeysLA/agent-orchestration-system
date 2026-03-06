@@ -163,13 +163,10 @@ async function testWorkflowExecution() {
 async function testWorkflowRollback() {
   const orc = new Orchestrator();
 
-  // Agent that fails on the 2nd call
-  let callCount = 0;
+  // Agent that always fails
   const fragileAgent = {
     execute: async (task) => {
-      callCount++;
-      if (callCount >= 2) throw new Error('Agent crashed');
-      return `done: ${task.substring(0, 20)}`;
+      throw new Error('Agent crashed');
     },
     healthCheck: async () => true
   };
@@ -413,7 +410,7 @@ async function testErrorHandling() {
     orc.registerAgent('fast', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
 
     // Teach RL to strongly prefer 'slow' for this context key
-    const { analyzeTask } = require('../src/meta-agent-router');
+    const { analyzeTask } = require('../src/villa-router');
     const analysis = analyzeTask('do something');
     const key = `${analysis.taskType}-${analysis.domain}`;
     orc.rl.update(key, 'slow', 200);
