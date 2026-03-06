@@ -537,7 +537,7 @@
   function initWebGL() {
     const canvas = els.vizCanvas;
     if (!canvas) return false;
-    gl = canvas.getContext('webgl', { antialias: false, alpha: false });
+    gl = canvas.getContext('webgl', { antialias: false, alpha: true });
     if (!gl) return false;
 
     // Compile shaders
@@ -724,15 +724,20 @@
 
   function tryLoadVideo(video, urls, idx) {
     if (idx >= urls.length) {
-      // No video available — WebGL shader is already running as primary visual
+      // No video available — fall back to WebGL shader
       video.style.opacity = '0';
+      if (els.vizCanvas) els.vizCanvas.style.opacity = '1';
+      startVisualizer(vizMood);
       return;
     }
 
     video.onerror = () => tryLoadVideo(video, urls, idx + 1);
     video.oncanplay = () => {
+      // Video loaded — show video, hide WebGL
       video.style.opacity = '1';
       video.play().catch(() => {});
+      stopVisualizer();
+      if (els.vizCanvas) els.vizCanvas.style.opacity = '0';
     };
     video.src = urls[idx];
     video.load();
@@ -910,7 +915,8 @@
   function showPlayer() {
     if (els.idleSection) els.idleSection.classList.add('hidden');
     if (els.playerSection) els.playerSection.classList.remove('hidden');
-    startVisualizer(vizMood);
+    // Don't auto-start WebGL here — video is the primary visual layer.
+    // WebGL only starts as fallback if no video asset loads (see tryLoadVideo).
   }
 
   function showIdle() {
@@ -919,6 +925,9 @@
     state.running = false;
     state.trackIndex = -1;
     state.tracks = [];
+    state._lastTrackId = null;
+    // Hide WebGL canvas
+    if (els.vizCanvas) els.vizCanvas.style.opacity = '0';
     stopCurrentPlayback();
     stopVisualizer();
     // Suspend AudioContext to kill any leaked audio nodes
@@ -1156,19 +1165,24 @@
 
     onWSMessage(msg) {
       if (msg.type === 'jukebox:ready') {
+        // Skip if generateSession() already set up this session (avoids double init)
+        if (state.sessionId === msg.sessionId && state.running) return;
         state.sessionId = msg.sessionId;
         state.tracks = msg.tracks || [];
         state.running = true;
         state.trackIndex = -1;
         showPlayer();
-        startVisualizer(msg.mood);
+        vizMood = msg.mood || 'default';
         renderPlaylist();
         if (els.playlistCount) els.playlistCount.textContent = `(${state.tracks.length} tracks)`;
         updateStatus(`Session ready: ${msg.mood}`);
       }
 
       else if (msg.type === 'jukebox:track') {
+        // Guard against duplicate WS delivery (multiple tabs / reconnects)
+        if (state.trackIndex === msg.trackIndex && state._lastTrackId === msg.track?.id) return;
         state.trackIndex = msg.trackIndex;
+        state._lastTrackId = msg.track?.id;
         const track = msg.track;
         const nextTrack = msg.nextTrack || null;
 
