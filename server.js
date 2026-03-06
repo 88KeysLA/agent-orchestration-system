@@ -578,8 +578,8 @@ Request: {task}`
   
   // Check auth and redirect to login if needed
   app.use((req, res, next) => {
-    // Skip auth for login page and auth endpoints
-    if (req.path === '/login' || req.path.startsWith('/api/auth/')) {
+    // Skip auth for login page, auth endpoints, and visual assets (served to <video> tags)
+    if (req.path === '/login' || req.path.startsWith('/api/auth/') || req.path.startsWith('/api/visual/')) {
       return next();
     }
 
@@ -602,7 +602,11 @@ Request: {task}`
   });
   
   const engines = setupPortal(app, orc, { musicService, generationManager: genManager });
-  
+
+  // Visual asset routes (pre-rendered videos from ~/visual-asset-system)
+  const setupVisualGenerationRoutes = require('./src/visual-generation-routes');
+  setupVisualGenerationRoutes(app);
+
   app.use(apiApp);          // API sub-app (existing routes preserved)
 
   // Metrics middleware

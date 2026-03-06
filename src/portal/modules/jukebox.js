@@ -669,16 +669,73 @@
   // Visual Display
   // ---------------------------------------------------------------------------
 
+  // Map jukebox moods to visual asset mood tags
+  const VISUAL_MOOD_MAP = {
+    'chill lounge': 'calm', 'deep focus': 'calm', 'sunset vibes': 'calm',
+    'jazz cafe': 'calm', 'late night': 'dark', 'electric': 'energetic',
+    'default': 'happy'
+  };
+
+  function getVisualMood() {
+    const m = (vizMood || 'default').toLowerCase();
+    return VISUAL_MOOD_MAP[m] || m.split(/\s+/)[0] || 'happy';
+  }
+
   function updateVisual(track, imageUrl) {
-    if (!track) return;
-    // Update mood palette for WebGL shader
-    const url = imageUrl || track._imageUrl;
-    if (url && els.visualContainer) {
-      // Overlay Imagen art behind the WebGL canvas (canvas is transparent-ish via shader)
-      els.visualContainer.style.backgroundImage = `url(${url})`;
+    if (!track || !els.visualContainer) return;
+
+    // Build a video asset key from track BPM + session mood
+    const f = track.features || {};
+    const bpm = f.tempo ? Math.round(f.tempo) : 120;
+    const mood = getVisualMood();
+
+    // Try to load a pre-rendered video asset
+    const videoKey = `${bpm}_${mood}`;
+    let video = els.visualContainer.querySelector('video.jukebox-bg-video');
+    if (!video) {
+      video = document.createElement('video');
+      video.className = 'jukebox-bg-video';
+      video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:0;transition:opacity 0.8s';
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      // Insert behind the canvas (canvas z-index is higher)
+      els.visualContainer.insertBefore(video, els.visualContainer.firstChild);
+    }
+
+    // Try exact BPM+mood match, then just mood, then named assets
+    const candidates = [
+      `/api/visual/video/${videoKey}`,
+      `/api/visual/local/${mood}_${bpm > 110 ? 'fast' : 'slow'}`,
+      `/api/visual/local/edm_${mood}`,
+      `/api/visual/local/fast_pop`,
+    ];
+
+    tryLoadVideo(video, candidates, 0);
+
+    // Also set Imagen image as background fallback
+    const imgUrl = imageUrl || track._imageUrl;
+    if (imgUrl) {
+      els.visualContainer.style.backgroundImage = `url(${imgUrl})`;
       els.visualContainer.style.backgroundSize = 'cover';
       els.visualContainer.style.backgroundPosition = 'center';
     }
+  }
+
+  function tryLoadVideo(video, urls, idx) {
+    if (idx >= urls.length) {
+      // No video available — WebGL shader is already running as primary visual
+      video.style.opacity = '0';
+      return;
+    }
+
+    video.onerror = () => tryLoadVideo(video, urls, idx + 1);
+    video.oncanplay = () => {
+      video.style.opacity = '1';
+      video.play().catch(() => {});
+    };
+    video.src = urls[idx];
+    video.load();
   }
 
   function updateTrackInfo(track) {
