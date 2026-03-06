@@ -1138,16 +1138,20 @@
     },
 
     async onActivate() {
-      // Check if a session is already running
+      // Check if a session is already running on the server
       try {
         const status = await VP.apiFetch('/api/jukebox/status');
-        if (status.running) {
+        if (status.running && status.totalTracks > 0) {
           state.running = true;
           state.sessionId = status.sessionId;
           showPlayer();
           updateStatus(`Session in progress: ${status.mood}`);
+        } else {
+          showIdle();
         }
-      } catch {}
+      } catch {
+        showIdle();
+      }
     },
 
     onWSMessage(msg) {
