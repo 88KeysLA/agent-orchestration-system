@@ -10,7 +10,7 @@
 
   const HISTORY_KEY = 'villa_portal_chat';
   const MAX_HISTORY = 100;
-  const AGENTS = ['auto', 'claude', 'gemini', 'chatgpt', 'ha', 'imagen', 'ollama', 'rag', 'claude-ha', 'claude-tools'];
+  const AGENTS = ['auto', 'ha', 'claude-tools', 'gemini-tools', 'chatgpt-tools', 'imagen', 'ollama', 'rag', 'echo'];
 
   let messages = [];
   let pendingId = null;

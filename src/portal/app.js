@@ -99,6 +99,7 @@
 
     // --- Routing ---
     switchPanel(name) {
+      const prev = this.activePanel;
       this.activePanel = name;
       document.querySelectorAll('.nav-tab').forEach(t => {
         t.classList.toggle('active', t.dataset.panel === name);
@@ -106,6 +107,10 @@
       document.querySelectorAll('.panel').forEach(p => {
         p.classList.toggle('active', p.id === `panel-${name}`);
       });
+      // Notify previous module of deactivation
+      const prevMod = this.modules[prev];
+      if (prevMod && typeof prevMod.onDeactivate === 'function') prevMod.onDeactivate();
+      // Notify new module of activation
       const mod = this.modules[name];
       if (mod && typeof mod.onActivate === 'function') mod.onActivate();
     },
@@ -140,6 +145,80 @@
     }
   };
 
+  // --- Keyboard Shortcuts ---
+  const PANELS = ['chat','dashboard','demo','visual','visuals','jukebox','music','audition','audio','images','hitl'];
+
+  function setupKeyboardShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      // Ignore when typing in inputs/textareas
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName)) return;
+      // Ignore with modifier keys (except shift)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // 1-9, 0 to switch panels
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9 && num <= PANELS.length) {
+        e.preventDefault();
+        VP.switchPanel(PANELS[num - 1]);
+        return;
+      }
+      if (e.key === '0' && PANELS.length >= 10) {
+        e.preventDefault();
+        VP.switchPanel(PANELS[9]);
+        return;
+      }
+
+      // Escape closes lightboxes/modals/help
+      if (e.key === 'Escape') {
+        const lb = document.querySelector('.lightbox');
+        if (lb) { lb.remove(); return; }
+        const help = document.getElementById('shortcut-help');
+        if (help) { help.remove(); return; }
+        return;
+      }
+
+      // ? shows shortcut help
+      if (e.key === '?') {
+        toggleShortcutHelp();
+        return;
+      }
+    });
+  }
+
+  function toggleShortcutHelp() {
+    let overlay = document.getElementById('shortcut-help');
+    if (overlay) { overlay.remove(); return; }
+    overlay = document.createElement('div');
+    overlay.id = 'shortcut-help';
+    overlay.className = 'shortcut-overlay';
+
+    const shortcuts = [
+      ['1', 'Chat'], ['2', 'Dashboard'], ['3', 'Demo'], ['4', 'Visual'],
+      ['5', 'Visuals'], ['6', 'Jukebox'], ['7', 'Music'], ['8', 'Audition'],
+      ['9', 'Audio'], ['0', 'Images'], ['/', 'Focus chat input'],
+      ['Esc', 'Close modal'], ['?', 'This help']
+    ];
+
+    const grid = shortcuts.map(([k, v]) =>
+      `<kbd>${k}</kbd><span>${v}</span>`
+    ).join('');
+
+    const card = document.createElement('div');
+    card.className = 'shortcut-card';
+    card.innerHTML = `<h2>Keyboard Shortcuts</h2><div class="shortcut-grid">${grid}</div>`;
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', () => overlay.remove());
+    card.appendChild(closeBtn);
+
+    overlay.appendChild(card);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) overlay.remove();
+    });
+    document.body.appendChild(overlay);
+  }
+
   // --- Boot ---
   document.addEventListener('DOMContentLoaded', () => {
     // Login form
@@ -164,5 +243,8 @@
       document.getElementById('app').classList.remove('hidden');
       VP.init();
     }
+
+    // Setup keyboard shortcuts
+    setupKeyboardShortcuts();
   });
 })();

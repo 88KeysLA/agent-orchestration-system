@@ -90,6 +90,13 @@ async function main() {
   const hitl = new HITL({ timeout: 60000, defaultAction: 'reject' });
   hitl.addGate(/\b(delete|destroy|drop|truncate|shutdown|reboot)\b/i, async (taskId, task) => {
     console.log(`[HITL] Approval needed for task ${taskId}: ${task.substring(0, 80)}`);
+    // Broadcast to Portal WebSocket clients
+    if (global._villaWss) {
+      const msg = JSON.stringify({ type: 'hitl_pending', pending: hitl.pending });
+      for (const c of global._villaWss.clients) {
+        if (c.readyState === 1) c.send(msg);
+      }
+    }
   });
   console.log('HITL: destructive task gates active');
 
@@ -723,6 +730,7 @@ Request: {task}`
   });
 
   const wss = setupWebSocket(server, orc, engines, { generationManager: genManager });
+  global._villaWss = wss; // Expose for HITL broadcasts
 
   // Graceful shutdown
   const shutdown = async () => {

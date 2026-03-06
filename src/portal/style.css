@@ -1929,3 +1929,129 @@ main {
 .jukebox-fullscreen .jukebox-controls-bar {
   transition: opacity 0.4s;
 }
+
+
+/* HITL Approval Panel */
+.hitl-panel { padding: 1.5rem; max-width: 800px; }
+.hitl-panel h2 { margin: 0 0 0.5rem; color: #e0e0ff; }
+.hitl-desc { color: #888; font-size: 0.85rem; margin: 0 0 1.5rem; }
+.hitl-empty { color: #666; text-align: center; padding: 3rem; font-size: 1.1rem; }
+.hitl-list { display: flex; flex-direction: column; gap: 1rem; }
+.hitl-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,100,100,0.3);
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+}
+.hitl-task {
+  font-size: 0.95rem;
+  color: #e0e0ff;
+  margin-bottom: 0.5rem;
+  word-break: break-word;
+}
+.hitl-id { font-size: 0.75rem; color: #666; margin-bottom: 0.75rem; font-family: monospace; }
+.hitl-actions { display: flex; gap: 0.75rem; }
+.hitl-approve {
+  background: rgba(100,255,100,0.15);
+  color: #8f8;
+  border: 1px solid rgba(100,255,100,0.3);
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+.hitl-approve:hover { background: rgba(100,255,100,0.25); }
+.hitl-reject {
+  background: rgba(255,100,100,0.15);
+  color: #f88;
+  border: 1px solid rgba(255,100,100,0.3);
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+.hitl-reject:hover { background: rgba(255,100,100,0.25); }
+.hitl-badge {
+  background: #f44;
+  color: #fff;
+  font-size: 0.7rem;
+  min-width: 18px;
+  height: 18px;
+  line-height: 18px;
+  text-align: center;
+  border-radius: 9px;
+  display: inline-block;
+  margin-left: 4px;
+  vertical-align: top;
+}
+.hitl-badge.hidden { display: none; }
+.nav-tab.flash {
+  animation: tab-flash 0.5s ease-in-out 3;
+}
+@keyframes tab-flash {
+  0%, 100% { background: transparent; }
+  50% { background: rgba(255,100,100,0.3); }
+}
+
+/* Keyboard Shortcut Help Overlay */
+.shortcut-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(4px);
+}
+.shortcut-card {
+  background: #1a1a2e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 420px;
+  width: 90%;
+}
+.shortcut-card h2 { margin: 0 0 1.25rem; color: #e0e0ff; font-size: 1.2rem; }
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.5rem 1rem;
+  align-items: center;
+}
+.shortcut-grid kbd {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  padding: 0.2rem 0.6rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: #e0e0ff;
+  text-align: center;
+  min-width: 28px;
+}
+.shortcut-grid span { color: #aaa; font-size: 0.9rem; }
+.shortcut-card button {
+  margin-top: 1.5rem;
+  width: 100%;
+  padding: 0.6rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  color: #aaa;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.shortcut-card button:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+/* Mic recording indicator */
+.chat-mic-btn.recording {
+  color: #f44 !important;
+  animation: mic-pulse 1s ease-in-out infinite;
+}
+@keyframes mic-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
