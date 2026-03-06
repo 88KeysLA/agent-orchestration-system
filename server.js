@@ -54,8 +54,6 @@ const metrics = require('./src/metrics');
 const HITL = require('./src/hitl');
 const { ContextManager, StaticProvider, TimeProvider } = require('./src/context-providers');
 const { PluginLoader } = require('./src/plugin-loader');
-let TenantManager;
-try { TenantManager = require('./src/tenancy'); } catch {}
 
 const VILLA_SYSTEM_PROMPT = `You are an AI agent in the Villa Romanza orchestration system.
 Villa Romanza is a large-scale smart home with 76 areas across 5 floors.
@@ -110,27 +108,12 @@ async function main() {
   }));
   console.log('Context: time + env providers active');
 
-  // Tenancy — opt-in via TENANTS env var (e.g., TENANTS=villa:100:5,dev:50:3)
-  let tenancy = null;
-  if (TenantManager && process.env.TENANTS) {
-    tenancy = new TenantManager();
-    for (const spec of process.env.TENANTS.split(',').map(s => s.trim()).filter(Boolean)) {
-      const [id, tasksPerHour, concurrent] = spec.split(':');
-      tenancy.create(id, {
-        tasksPerHour: parseInt(tasksPerHour) || Infinity,
-        concurrent: parseInt(concurrent) || Infinity
-      });
-      console.log(`Tenant: ${id} (${tasksPerHour || '∞'} tasks/hr, ${concurrent || '∞'} concurrent)`);
-    }
-  }
-
   const orc = new Orchestrator({
     rewardFn: (result, metadata) => scorer.score(result, metadata),
     persistPath: path.join(dataDir, 'rl-qtable.json'),
     eventStorePath: path.join(dataDir, 'events.json'),
     hitl,
     context,
-    tenancy,
     contextKeyFn: (analysis, snapshot) => {
       const period = snapshot?.time?.period || 'any';
       const mode = snapshot?.ha?.villa_mode || 'any';

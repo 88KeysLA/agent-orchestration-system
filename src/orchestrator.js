@@ -46,7 +46,6 @@ class Orchestrator {
 
     // Optional pluggable components
     this.hitl = options.hitl || null;
-    this.tenancy = options.tenancy || null;
     this.context = options.context || null;
     this.composer = new AgentComposer();
 
@@ -83,7 +82,6 @@ class Orchestrator {
   async execute(taskDescription, context, options = {}) {
     const taskId = `task-${++this._taskCounter}`;
     const startTime = Date.now();
-    const tenantId = options.tenantId || null;
 
     // 1. Analyze task via meta-router
     const analysis = analyzeTask(taskDescription);
@@ -97,14 +95,7 @@ class Orchestrator {
       }
     }
 
-    // 3. Tenancy quota check
-    let releaseQuota = null;
-    if (this.tenancy && tenantId) {
-      this.tenancy.checkQuota(tenantId); // throws if over limit
-      releaseQuota = this.tenancy.recordUsage(tenantId);
-    }
-
-    // 4. Get context snapshot (influences routing metadata)
+    // 3. Get context snapshot (influences routing metadata)
     const contextSnapshot = this.context ? await this.context.getContext() : null;
 
     // Enrich contextKey with context dimensions if hook provided
@@ -152,7 +143,7 @@ class Orchestrator {
 
     // 5. Event: task started
     this.eventStore.append(taskId, 'task.started', {
-      task: taskDescription, agent: selectedAgent, analysis, decisionId, tenantId, contextSnapshot
+      task: taskDescription, agent: selectedAgent, analysis, decisionId, contextSnapshot
     });
 
     // 6. Execute agent
@@ -171,8 +162,6 @@ class Orchestrator {
       this.eventStore.append(taskId, 'task.failed', {
         agent: selectedAgent, error: error.message
       });
-    } finally {
-      if (releaseQuota) releaseQuota();
     }
 
     // 7. Update RL with reward (pass metadata for multi-objective scoring)
@@ -193,7 +182,6 @@ class Orchestrator {
       reward,
       duration,
       tokens,
-      tenantId,
       timestamp: new Date().toISOString()
     };
 

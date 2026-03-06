@@ -340,19 +340,6 @@ async function testErrorHandling() {
     hitl.shutdown();
   });
 
-  // Tenancy integration
-  await test('Tenancy quota enforced in execute()', async () => {
-    const TenantManager = require('../src/tenancy');
-    const tenancy = new TenantManager();
-    tenancy.create('t1', { tasksPerHour: 1 });
-    const orc = new Orchestrator({ tenancy });
-    orc.registerAgent('a', '1.0.0', { execute: async () => 'ok', healthCheck: async () => true }, {});
-    await orc.execute('task 1', null, { tenantId: 't1' });
-    let threw = false;
-    try { await orc.execute('task 2', null, { tenantId: 't1' }); } catch { threw = true; }
-    if (!threw) throw new Error('Should throw on quota exceeded');
-  });
-
   // Context provider integration
   await test('Context snapshot included in task result events', async () => {
     const { ContextManager, StaticProvider } = require('../src/context-providers');
