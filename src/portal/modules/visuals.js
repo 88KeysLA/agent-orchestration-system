@@ -4,6 +4,7 @@
  */
 (function() {
   'use strict';
+  const VP = window.VillaPortal;
 
   const els = {};
   let currentJob = null;
@@ -287,11 +288,9 @@
     }, 5000);
   }
 
-  if (typeof VP !== 'undefined') {
-    VP.modules.visuals = { 
-      init,
-      generateForTrack,
-      get autoGenerateEnabled() { return autoGenerateEnabled; }
-    };
-  }
+  VP.modules.visuals = { 
+    init,
+    generateForTrack,
+    get autoGenerateEnabled() { return autoGenerateEnabled; }
+  };
 })();
