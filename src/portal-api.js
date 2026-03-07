@@ -792,6 +792,57 @@ function setupRoutes(app, orchestrator, { musicService, generationManager } = {}
     res.json(result);
   });
 
+
+  // =========================================================================
+  // RAG Knowledge Proxy (uses curl — Node fetch unreliable in nohup)
+  // =========================================================================
+  const RAG_URL = process.env.RAG_HOST || 'http://192.168.0.60:8450';
+  const { execFile: ragExec } = require('child_process');
+
+  function ragFetch(urlPath, { method = 'GET', body, timeout = 30000 } = {}) {
+    const url = RAG_URL + urlPath;
+    const timeoutSec = Math.ceil(timeout / 1000);
+    const args = ['-s', '--max-time', String(timeoutSec)];
+    if (method !== 'GET') args.push('-X', method);
+    if (body) {
+      args.push('-H', 'Content-Type: application/json');
+      args.push('-d', JSON.stringify(body));
+    }
+    args.push(url);
+    return new Promise((resolve, reject) => {
+      ragExec('curl', args, { timeout: timeout + 2000, encoding: 'utf-8' }, (err, stdout) => {
+        if (err) return reject(new Error('RAG curl: ' + err.message.substring(0, 200)));
+        try { resolve(JSON.parse(stdout)); } catch { resolve({ raw: stdout }); }
+      });
+    });
+  }
+
+  app.post('/api/rag/query', portalAuth, async (req, res) => {
+    try {
+      const { query, question, top_k } = req.body;
+      const q = query || question;
+      if (!q) return res.status(400).json({ error: 'query required' });
+      const data = await ragFetch('/query', {
+        method: 'POST',
+        body: { question: q, top_k: top_k || 5 },
+        timeout: 30000,
+      });
+      res.json(data);
+    } catch (err) {
+      res.status(502).json({ error: 'RAG unavailable', detail: err.message });
+    }
+  });
+
+  app.get('/api/rag/stats', portalAuth, async (req, res) => {
+    try { res.json(await ragFetch('/stats')); }
+    catch (err) { res.status(502).json({ error: 'RAG unavailable', detail: err.message }); }
+  });
+
+  app.get('/api/rag/health', portalAuth, async (req, res) => {
+    try { res.json(await ragFetch('/health')); }
+    catch (err) { res.status(502).json({ error: 'RAG unavailable', detail: err.message }); }
+  });
+
   return { demo, jukebox };
 }
 
